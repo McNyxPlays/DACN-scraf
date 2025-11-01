@@ -1,65 +1,36 @@
-import axios from "axios";
+// src/api/index.js
+import axios from 'axios';
 
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   withCredentials: true,
   headers: {
-    "Content-Type": "application/json",
-    "X-CSRF-Token": sessionStorage.getItem("csrf_token") || "", 
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': sessionStorage.getItem('csrf_token') || '',
   },
+});
+
+// === Optional: Interceptors để tự động cập nhật CSRF token ===
+api.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('csrf_token') || 
+                document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  if (token) config.headers['X-CSRF-Token'] = token;
+  return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error("API error:", error);
+    // Xử lý lỗi chung (401, 403, v.v.)
+    if (error.response?.status === 401) {
+      sessionStorage.removeItem('user');
+      localStorage.removeItem('user');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('401 handled silently for validation');  // Reduce red errors
+      }
+    }
     return Promise.reject(error);
   }
 );
 
-export const getConversations = () => api.get("/messages.php");
-export const getConversationMessages = (conversationId) =>
-  api.get(`/messages.php?conversation_id=${conversationId}`);
-export const sendMessage = (messageData) => api.post("/messages.php", messageData);
-
-export const getUsers = (params) => api.get("/Usersmana.php", { params });
-export const getUserById = (id) => api.get(`/Usersmana.php?id=${id}`);
-export const addUser = (userData) => api.post("/Usersmana.php", userData, {
-  headers: { "Content-Type": "multipart/form-data" }
-});
-export const updateUserById = (id, userData) => {
-  const formDataObj = {};
-  userData.forEach((value, key) => { formDataObj[key] = value; });
-  return api.put(`/Usersmana.php?id=${id}`, formDataObj, {
-    headers: { "Content-Type": "application/x-www-form-urlencoded" }
-  });
-};
-export const deleteUser = (id) => api.delete(`/Usersmana.php?id=${id}`);
-
-/*
-// Endpoints cho notifications
-export const getNotifications = (params) =>
-  api.get("/notifications.php", { params });
-export const markNotificationsAsRead = () =>
-  api.post("/notifications.php?action=markAsRead");
-export const deleteNotifications = () =>
-  api.post("/notifications.php?action=delete");
-
-// Lấy thông tin người dùng hiện tại
-export const getUser = () => api.get("/user.php");
-
-// Cập nhật thông tin người dùng hiện tại
-export const updateUser = (userData) => api.put("/user.php", userData);
-
-// Đăng xuất
-export const logout = () => api.post("/user.php");
-
-// Đăng nhập
-export const login = (email, password) =>
-  api.post("/login.php", { email, password });
-
-// Đăng ký
-export const register = (email, password, full_name) =>
-  api.post("/register.php", { email, password, full_name });
-*/
 export default api;

@@ -32,7 +32,7 @@ const PromotionsManagement = () => {
       setError("");
       const params = { search };
       if (status) params.status = status;
-      const response = await api.get("/promotionsmana.php", { params });
+      const response = await api.get("/promotions", { params });
       if (response.data.status === "success" && Array.isArray(response.data.data)) {
         setPromotions(response.data.data);
         setError("");
@@ -106,10 +106,6 @@ const PromotionsManagement = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.code) {
-      setError("Promo code is required");
-      return;
-    }
     if (formData.discount_percentage < 0 || formData.discount_percentage > 100) {
       setError("Discount percentage must be between 0 and 100");
       return;
@@ -123,48 +119,69 @@ const PromotionsManagement = () => {
       return;
     }
 
+    const requestData = {
+      ...formData,
+      start_date: parseDateInput(formData.start_date),
+      end_date: parseDateInput(formData.end_date),
+      usage_count: parseInt(formData.usage_count),
+      is_active: formData.is_active,
+    };
     try {
-      const requestData = {
-        ...formData,
-        start_date: parseDateInput(formData.start_date),
-        end_date: parseDateInput(formData.end_date),
-        usage_count: parseInt(formData.usage_count),
-        is_active: formData.is_active,
-      };
-      if (modalMode === "add") {
-        const response = await api.post("/promotionsmana.php", requestData);
-        if (response.data.status === "success") {
-          Toastify.success("Promotion added successfully");
-          fetchPromotions();
-          closeModal();
-        } else {
-          setError(response.data.message || "Failed to add promotion");
-        }
+      const response = await api.post("/promotions", requestData);
+      if (response.data.status === "success") {
+        Toastify.success("Promotion added successfully");
+        navigate("/admin/promotions");
       } else {
-        const promotion = promotions.find(p => p.promotion_id === parseInt(formData.promotion_id));
-        const response = await api.put(`/promotionsmana.php?id=${promotion?.promotion_id || 0}`, requestData);
-        if (response.data.status === "success") {
-          Toastify.success("Promotion updated successfully");
-          fetchPromotions();
-          closeModal();
-        } else {
-          setError(response.data.message || "Failed to update promotion");
-        }
+        setError(response.data.message || "Failed to add promotion");
       }
     } catch (err) {
-      setError(modalMode === "add" ? "Failed to add promotion" : "Failed to update promotion");
+      setError("Failed to add promotion: " + (err.message || "Unknown error"));
       console.error(err);
     }
   };
 
-  const handleDelete = async (promotionId) => {
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (formData.discount_percentage < 0 || formData.discount_percentage > 100) {
+      setError("Discount percentage must be between 0 and 100");
+      return;
+    }
+    if (formData.usage_count < 0) {
+      setError("Usage count cannot be negative");
+      return;
+    }
+    if (new Date(parseDateInput(formData.end_date)) <= new Date(parseDateInput(formData.start_date))) {
+      setError("End date must be after start date");
+      return;
+    }
+
+    const requestData = {
+      ...formData,
+      start_date: parseDateInput(formData.start_date),
+      end_date: parseDateInput(formData.end_date),
+      usage_count: parseInt(formData.usage_count),
+      is_active: formData.is_active,
+    };
+    try {
+      const response = await api.put(`/promotions?id=${formData.promotion_id}`, requestData);
+      if (response.data.status === "success") {
+        closeModal();
+        fetchPromotions();
+      } else {
+        setError(response.data.message || "Failed to update promotion");
+      }
+    } catch (err) {
+      setError("Failed to update promotion: " + (err.message || "Unknown error"));
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this promotion?")) return;
     try {
-      const response = await api.delete(`/promotionsmana.php?id=${promotionId}`);
+      const response = await api.delete(`/promotions?id=${id}`);
       if (response.data.status === "success") {
-        setPromotions(promotions.filter((p) => p.promotion_id !== promotionId));
-        setError("");
-        Toastify.success("Promotion deleted successfully");
+        fetchPromotions();
       } else {
         setError(response.data.message || "Failed to delete promotion");
       }
@@ -174,94 +191,100 @@ const PromotionsManagement = () => {
     }
   };
 
+  if (loading) {
+    return <div className="text-center py-4">Loading...</div>;
+  }
+
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Promotions Management</h1>
-      <div className="mb-4 flex flex-wrap gap-4">
-        <input
-          type="text"
-          placeholder="Search promotions or codes..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-1/2 px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <h1 className="text-2xl font-bold mb-4 md:mb-0">Promotions Management</h1>
+        <button
+          onClick={openAddModal}
+          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
+        >
+          Add Promotion
+        </button>
+      </div>
+      <div className="mb-6 flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Search promotions..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary pl-10"
+          />
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <FaSearch />
+          </div>
+        </div>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="w-full sm:w-1/4 px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          className="px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
           <option value="expired">Expired</option>
         </select>
-        <button
-          onClick={openAddModal}
-          className="w-full sm:w-auto bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
-        >
-          Add Promotion
-        </button>
       </div>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-      {loading ? (
-        <p className="text-gray-500 mb-4">Loading promotions...</p>
+      {promotions.length === 0 ? (
+        <p className="text-gray-500 text-center">No promotions found.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
+          <table className="min-w-full bg-white border border-gray-200">
             <thead>
-              <tr className="flex w-full">
-                <th className="flex-1 px-3 py-2 border text-center">ID</th>
-                <th className="flex-2 px-3 py-2 border text-center">Name</th>
-                <th className="flex-1 px-3 py-2 border text-center">Code</th>
-                <th className="flex-1 px-3 py-2 border text-center">Discount (%)</th>
-                <th className="flex-1 px-3 py-2 border text-center">Usage Count</th>
-                <th className="flex-1 px-3 py-2 border text-center">Start Date</th>
-                <th className="flex-1 px-3 py-2 border text-center">End Date</th>
-                <th className="flex-1 px-3 py-2 border text-center">Status</th>
-                <th className="flex-1 px-3 py-2 border text-center">Active</th>
-                <th className="flex-1 px-3 py-2 border text-center">Actions</th>
+              <tr className="bg-gray-100">
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">ID</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Name</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Code</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Discount (%)</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Start Date</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">End Date</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Status</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Usage Count</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Active</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Created At</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Updated At</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {Array.isArray(promotions) && promotions.length > 0 ? (
-                promotions.map((promotion) => (
-                  <tr key={promotion.promotion_id} className="flex w-full">
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.promotion_id}</td>
-                    <td className="flex-2 px-3 py-2 border text-center">{promotion.name}</td>
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.code}</td>
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.discount_percentage || 0}%</td>
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.usage_count || 0}</td>
-                    <td className="flex-1 px-3 py-2 border text-center">
-                      {promotion.start_date ? format(new Date(promotion.start_date), "dd/MM/yyyy") : ""}
-                    </td>
-                    <td className="flex-1 px-3 py-2 border text-center">
-                      {promotion.end_date ? format(new Date(promotion.end_date), "dd/MM/yyyy") : ""}
-                    </td>
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.status}</td>
-                    <td className="flex-1 px-3 py-2 border text-center">{promotion.is_active ? "Yes" : "No"}</td>
-                    <td className="flex-1 px-3 py-2 border flex justify-center gap-2">
-                      <button
-                        onClick={() => openEditModal(promotion)}
-                        className="text-blue-500 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(promotion.promotion_id)}
-                        className="text-red-500 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr className="flex w-full">
-                  <td colSpan="10" className="flex-1 px-3 py-2 border text-center">
-                    No promotions found
+              {promotions.map((promotion) => (
+                <tr key={promotion.promotion_id} className="border-b">
+                  <td className="py-3 px-4">{promotion.promotion_id}</td>
+                  <td className="py-3 px-4">{promotion.name}</td>
+                  <td className="py-3 px-4">{promotion.code}</td>
+                  <td className="py-3 px-4">{promotion.discount_percentage}</td>
+                  <td className="py-3 px-4">{promotion.start_date}</td>
+                  <td className="py-3 px-4">{promotion.end_date}</td>
+                  <td className="py-3 px-4">{promotion.status}</td>
+                  <td className="py-3 px-4">{promotion.usage_count}</td>
+                  <td className="py-3 px-4">{promotion.is_active ? "Yes" : "No"}</td>
+                  <td className="py-3 px-4">{new Date(promotion.created_at).toLocaleString()}</td>
+                  <td className="py-3 px-4">{new Date(promotion.updated_at).toLocaleString()}</td>
+                  <td className="py-3 px-4 flex gap-2">
+                    <button
+                      onClick={() => openEditModal(promotion)}
+                      className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(promotion.promotion_id)}
+                      className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -269,12 +292,12 @@ const PromotionsManagement = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-lg w-full" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
             <h2 className="text-xl font-bold mb-4">
               {modalMode === "add" ? "Add New Promotion" : "Edit Promotion"}
             </h2>
             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={modalMode === "add" ? handleSubmit : handleUpdate}>
               <div className="mb-4">
                 <label className="block text-gray-700 mb-2">Name</label>
                 <input
@@ -287,7 +310,7 @@ const PromotionsManagement = () => {
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Promo Code</label>
+                <label className="block text-gray-700 mb-2">Code</label>
                 <input
                   type="text"
                   name="code"
@@ -298,16 +321,15 @@ const PromotionsManagement = () => {
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Discount (%)</label>
+                <label className="block text-gray-700 mb-2">Discount Percentage</label>
                 <input
                   type="number"
                   name="discount_percentage"
                   value={formData.discount_percentage}
                   onChange={handleChange}
-                  required
                   min="0"
                   max="100"
-                  step="0.01"
+                  required
                   className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -318,9 +340,7 @@ const PromotionsManagement = () => {
                   name="usage_count"
                   value={formData.usage_count}
                   onChange={handleChange}
-                  required
                   min="0"
-                  step="1"
                   className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>

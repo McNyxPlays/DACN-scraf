@@ -23,7 +23,7 @@ const CategoriesManagement = () => {
       setLoading(true);
       setError("");
       const params = { search };
-      const response = await api.get("/categoriesmana.php", { params });
+      const response = await api.get("/categories", { params });
       if (
         response.data.status === "success" &&
         Array.isArray(response.data.data)
@@ -78,7 +78,6 @@ const CategoriesManagement = () => {
 
   const closeModal = () => {
     setShowModal(false);
-    setEditCategoryId(null);
     setError("");
   };
 
@@ -90,129 +89,101 @@ const CategoriesManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let response;
       if (modalMode === "add") {
-        const response = await api.post("/categoriesmana.php", formData);
-        if (response.data.status === "success") {
-          fetchCategories();
-          closeModal();
-        } else {
-          setError(response.data.message || "Failed to add category");
-        }
+        response = await api.post("/categories", formData);
       } else {
-        const response = await api.put(
-          `/categoriesmana.php?id=${editCategoryId}`,
-          formData
-        );
-        if (response.data.status === "success") {
-          fetchCategories();
-          closeModal();
-        } else {
-          setError(response.data.message || "Failed to update category");
-        }
+        response = await api.put(`/categories?id=${editCategoryId}`, formData);
+      }
+      if (response.data.status === "success") {
+        fetchCategories();
+        closeModal();
+      } else {
+        setError(response.data.message || "Failed to save category");
       }
     } catch (err) {
       if (err.response && err.response.data.message) {
         setError(err.response.data.message);
       } else {
-        setError(
-          modalMode === "add"
-            ? "Failed to add category"
-            : "Failed to update category"
-        );
+        setError("Failed to save category");
       }
       console.error(err);
     }
   };
 
-  const handleDelete = async (categoryId) => {
-    if (!window.confirm("Are you sure you want to delete this category?"))
-      return;
-    try {
-      const response = await api.delete(`/categoriesmana.php?id=${categoryId}`);
-      if (response.data.status === "success") {
-        setCategories(
-          categories.filter((cat) => cat.category_id !== categoryId)
-        );
-        setError("");
-      } else {
-        setError(response.data.message || "Failed to delete category");
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
+      try {
+        const response = await api.delete(`/categories?id=${id}`);
+        if (response.data.status === "success") {
+          fetchCategories();
+        } else {
+          setError(response.data.message || "Failed to delete category");
+        }
+      } catch (err) {
+        setError("Failed to delete category");
+        console.error(err);
       }
-    } catch (err) {
-      if (err.response && err.response.status === 403) {
-        setError("You do not have permission to perform this action.");
-      } else {
-        setError(
-          "Failed to delete category: " + (err.message || "Unknown error")
-        );
-      }
-      console.error(err);
     }
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Categories Management</h1>
-      <div className="mb-4 flex flex-col sm:flex-row gap-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Categories Management</h1>
+        <button
+          onClick={openAddModal}
+          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
+        >
+          Add New Category
+        </button>
+      </div>
+      <div className="mb-4">
         <input
           type="text"
           placeholder="Search categories..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full sm:w-1/3 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
         />
-        <button
-          onClick={openAddModal}
-          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
-        >
-          Add Category
-        </button>
       </div>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
       {loading ? (
-        <p className="text-gray-500 mb-4">Loading categories...</p>
+        <div className="text-center py-4">Loading...</div>
+      ) : error ? (
+        <p className="text-red-500 mb-4">{error}</p>
+      ) : categories.length === 0 ? (
+        <div className="text-center py-4">No categories found.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
+          <table className="min-w-full bg-white rounded-lg shadow-md">
             <thead>
-              <tr>
-                <th className="px-4 py-2 border">ID</th>
-                <th className="px-4 py-2 border">Name</th>
-                <th className="px-4 py-2 border">Description</th>
-                <th className="px-4 py-2 border">Actions</th>
+              <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                <th className="py-3 px-6 text-left">Name</th>
+                <th className="py-3 px-6 text-left">Description</th>
+                <th className="py-3 px-6 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {Array.isArray(categories) && categories.length > 0 ? (
-                categories.map((category) => (
-                  <tr key={category.category_id}>
-                    <td className="px-4 py-2 border">{category.category_id}</td>
-                    <td className="px-4 py-2 border">{category.name}</td>
-                    <td className="px-4 py-2 border">
-                      {category.description || "-"}
-                    </td>
-                    <td className="px-4 py-2 border flex gap-2">
-                      <button
-                        onClick={() => openEditModal(category)}
-                        className="text-blue-500 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(category.category_id)}
-                        className="text-red-500 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="4" className="px-4 py-2 border text-center">
-                    No categories found
+            <tbody className="text-gray-600 text-sm font-light">
+              {categories.map((category) => (
+                <tr key={category.category_id} className="border-b border-gray-200 hover:bg-gray-100">
+                  <td className="py-3 px-6">{category.name}</td>
+                  <td className="py-3 px-6">{category.description || "No description"}</td>
+                  <td className="py-3 px-6 flex justify-center gap-2">
+                    <button
+                      onClick={() => openEditModal(category)}
+                      className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(category.category_id)}
+                      className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>

@@ -20,7 +20,7 @@ const MainContent = ({ activeTab, setActiveTab, className }) => {
   useEffect(() => {
     if (activeTab === "posts") {
       api
-        .get("/posts.php", {
+        .get("/posts", {
           params: { limit: 10, offset: 0, user_id: "current" },
         })
         .then(async (response) => {
@@ -28,7 +28,7 @@ const MainContent = ({ activeTab, setActiveTab, className }) => {
             const postsData = response.data.posts;
             const postsWithImages = await Promise.all(
               postsData.map(async (post) => {
-                const imageResponse = await api.get("/posts_images.php", {
+                const imageResponse = await api.get("/posts-images", {
                   params: { post_id: post.post_id },
                 });
                 return { ...post, images: imageResponse.data.images || [] };
@@ -58,77 +58,103 @@ const MainContent = ({ activeTab, setActiveTab, className }) => {
         });
 
       api
-        .get("/user.php")
+        .get("/user")
         .then((response) => {
           if (response.data.status === "success") {
-            const fetchedUser = response.data.user;
             setUserData({
-              name: fetchedUser.full_name || "Unknown User",
-              profile_image: fetchedUser.profile_image || "",
-              user_id: fetchedUser.user_id || null,
+              name: response.data.user.full_name,
+              profile_image: response.data.user.profile_image,
+              user_id: response.data.user.user_id,
             });
           }
         })
         .catch((error) => {
           console.error("Error fetching user data:", error);
+          Toastify.error("Failed to load user data.");
         });
     }
-  }, [activeTab, imageLoaded]);
+  }, [activeTab]);
 
-  const handleDeletePost = (postId) => {
-    api
-      .delete(`/posts.php?post_id=${postId}`)
-      .then((response) => {
-        if (response.data.status === "success") {
-          setPosts(posts.filter((post) => post.post_id !== postId));
-          Toastify.success("Post deleted successfully!");
-        } else {
-          Toastify.error(response.data.message || "Failed to delete post.");
-        }
-      })
-      .catch((error) => {
-        console.error("Error deleting post:", error);
-        Toastify.error("Failed to delete post.");
-      });
-    setDropdownOpen(null);
-  };
-
-  const handleCreatePost = () => {
-    if (!postContent.trim()) {
-      Toastify.error("Content is required.");
+  const handlePostSubmit = async () => {
+    if (!userData.user_id) {
+      Toastify.error("Please log in to post.");
       return;
     }
+    if (!postContent.trim() && postImages.length === 0) return;
 
     const formData = new FormData();
     formData.append("content", postContent);
     formData.append("post_time_status", "new");
-    postImages.forEach((image) => formData.append("images[]", image));
+    postImages.forEach((image, index) => {
+      formData.append(`images[${index}]`, image);
+    });
 
-    api
-      .post("/posts.php", formData, {
+    try {
+      const response = await api.post("/posts", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-      })
-      .then((response) => {
-        if (response.data.status === "success") {
-          setPosts([response.data.post, ...posts]);
-          setPostContent("");
-          setPostImages([]);
-          Toastify.success("Post created successfully!");
-        } else {
-          Toastify.error(response.data.message || "Failed to create post.");
-        }
-      })
-      .catch((error) => {
-        console.error("Error creating post:", error);
-        Toastify.error("Failed to create post.");
       });
+      if (response.data.status === "success") {
+        setPostContent("");
+        setPostImages([]);
+        // Refresh posts
+        api
+          .get("/posts", {
+            params: { limit: 10, offset: 0, user_id: "current" },
+          })
+          .then(async (response) => {
+            if (response.data.status === "success") {
+              const postsData = response.data.posts;
+              const postsWithImages = await Promise.all(
+                postsData.map(async (post) => {
+                  const imageResponse = await api.get("/posts-images", {
+                    params: { post_id: post.post_id },
+                  });
+                  return { ...post, images: imageResponse.data.images || [] };
+                })
+              );
+              setPosts(postsWithImages);
+            }
+          })
+          .catch((error) => {
+            console.error("Error refreshing posts:", error);
+          });
+        Toastify.success("Post created successfully!");
+      }
+    } catch (err) {
+      console.error("Error creating post:", err);
+      Toastify.error("Failed to create post.");
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    setPostImages((prev) => [...prev, ...files]);
+  };
+
+  const handleRemoveImage = (index) => {
+    setPostImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const toggleDropdown = (postId) => {
     setDropdownOpen(dropdownOpen === postId ? null : postId);
   };
 
-  const handlePostClick = (post) => {
+  const handleDeletePost = async (postId) => {
+    if (!userData.user_id) {
+      Toastify.error("Please log in to delete posts.");
+      return;
+    }
+    try {
+      await api.delete(`/posts?id=${postId}`);
+      setPosts((prev) => prev.filter((post) => post.post_id !== postId));
+      Toastify.success("Post deleted successfully!");
+    } catch (err) {
+      console.error("Error deleting post:", err);
+      Toastify.error("Failed to delete post.");
+    }
+  };
+
+  const openPostDetail = (post) => {
     setSelectedPost(post);
   };
 
@@ -136,174 +162,181 @@ const MainContent = ({ activeTab, setActiveTab, className }) => {
     setSelectedPost(null);
   };
 
-  const toggleDropdownAndPrevent = (e, postId) => {
-    e.stopPropagation();
-    toggleDropdown(postId);
+  const toggleExpand = (postId) => {
+    setExpandedPosts((prev) => ({ ...prev, [postId]: !prev[postId] }));
   };
 
   return (
     <div className={`w-full ${className}`}>
-      <div className="bg-white rounded-lg shadow-md mb-6">
-        {activeTab === "posts" && (
-          <div className="p-4 max-w-4xl mx-auto"> {/* Thu hẹp chiều ngang */}
-            <div className="mb-6">
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <textarea
-                  className="w-full bg-white border border-gray-300 rounded-lg p-3 text-sm text-gray-700 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="What's on your mind?"
-                  rows={3}
-                  value={postContent}
-                  onChange={(e) => setPostContent(e.target.value)}
-                />
-                {postImages.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mt-2">
-                    {postImages.map((image, index) => (
-                      <div key={index} className="relative">
-                        <div className="w-full h-24 bg-black flex items-center justify-center">
+      {activeTab === "posts" && (
+        <div className="space-y-6">
+          {userData.user_id && (
+            <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+              <div className="flex gap-3 mb-4">
+                {userData.profile_image ? (
+                  <img
+                    src={`/Uploads/avatars/${userData.profile_image}`}
+                    alt="User Profile"
+                    className="w-10 h-10 rounded-full object-cover"
+                    onError={(e) => (e.target.src = "/placeholder.jpg")}
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                    <i className="ri-user-line ri-lg text-gray-700"></i>
+                  </div>
+                )}
+                <div className="flex-1">
+                  <textarea
+                    placeholder="What's on your mind?"
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    rows="3"
+                  />
+                  {postImages.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {postImages.map((image, index) => (
+                        <div key={index} className="relative">
                           <img
                             src={URL.createObjectURL(image)}
                             alt="Preview"
-                            className="max-w-full h-24 object-contain rounded-lg"
+                            className="w-full h-24 object-cover rounded-lg"
                           />
+                          <button
+                            onClick={() => handleRemoveImage(index)}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                          >
+                            ×
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPostImages(postImages.filter((_, i) => i !== index))
-                          }
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mt-3">
+                    <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
+                      <i className="ri-image-add-line text-xl"></i>
+                      <span>Photo</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      onClick={handlePostSubmit}
+                      className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+                    >
+                      Post
+                    </button>
                   </div>
-                )}
-                <div className="flex items-center justify-between mt-3">
-                  <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                    <i className="ri-image-add-line text-xl"></i>
-                    <span>Photo</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) =>
-                        setPostImages([...postImages, ...Array.from(e.target.files)])
-                      }
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    className="bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-all"
-                    onClick={handleCreatePost}
-                  >
-                    Post
-                  </button>
                 </div>
               </div>
             </div>
-            <div className="space-y-4">
-              {posts.map((post) => (
-                <div
-                  key={post.post_id}
-                  className="border border-gray-200 rounded-lg p-4 mb-6 bg-white shadow-sm max-w-[10000px] mx-auto cursor-pointer"
-                  style={{ width: "100%", maxWidth: "10000px" }}
-                  onClick={() => handlePostClick(post)}
-                >
-                  <div className="flex justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        {userData.profile_image ? (
-                          <img
-                            src={`/Uploads/${userData.profile_image}`}
-                            alt="User Profile"
-                            className="w-full h-full rounded-full object-cover"
-                            onError={(e) => (e.target.src = "/Uploads/placeholder.jpg")}
-                          />
-                        ) : (
-                          <FaUser className="text-gray-500 text-2xl" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{userData.name}</p>
-                        <p className="text-gray-500 text-sm">
-                          {new Date(post.created_at).toLocaleString()} ·{" "}
-                          <i className="ri-earth-line"></i> Public
-                        </p>
-                      </div>
-                    </div>
-                    {userData.user_id && userData.user_id === post.user_id && (
-                      <div className="relative" onClick={(e) => toggleDropdownAndPrevent(e, post.post_id)}>
-                        <button
-                          className="text-gray-500 hover:text-gray-700 focus:outline-none"
-                        >
-                          <i className="ri-more-2-fill ri-lg"></i>
-                        </button>
-                        {dropdownOpen === post.post_id && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                            <button
-                              onClick={() => handleDeletePost(post.post_id)}
-                              className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-                            >
-                              Delete Post
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-gray-800 mb-2 whitespace-pre-wrap break-words">
-                    {post.content}
-                  </p>
-                  {post.images && post.images.length > 0 && (
-                    <div className="grid grid-cols-1 gap-2 mb-2">
-                      {post.images.map((image, index) => {
-                        const fullImageUrl = `/Uploads/posts/${image.split('/').pop()}`;
-                        return (
-                          <div key={index} className="relative">
-                            {imageLoaded[fullImageUrl] === undefined ? (
-                              <div className="w-full h-48 bg-gray-200 rounded-lg animate-pulse"></div>
-                            ) : (
-                              <div className="w-full h-80 bg-black flex items-center justify-center rounded-lg">
-                                <img
-                                  src={
-                                    imageLoaded[fullImageUrl] ? fullImageUrl : "/Uploads/placeholder.jpg"
-                                  }
-                                  alt="Post Image"
-                                  className="max-w-full h-80 object-contain border-l-2 border-r-2 border-gray-700 rounded-lg"
-                                  onError={(e) => (e.target.src = "/Uploads/placeholder.jpg")}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+          )}
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <div key={post.post_id} className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex gap-3 mb-4">
+                  {post.profile_image ? (
+                    <img
+                      src={`/Uploads/avatars/${post.profile_image}`}
+                      alt="User Profile"
+                      className="w-10 h-10 rounded-full object-cover"
+                      onError={(e) => (e.target.src = "/placeholder.jpg")}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                      <i className="ri-user-line ri-lg text-gray-700"></i>
                     </div>
                   )}
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <div className="flex items-center gap-1 text-gray-500">
-                      <i className="ri-thumb-up-fill text-blue-600"></i>
-                      <span>{post.like_count || 0}</span>
-                    </div>
-                    <div className="flex items-center gap-3 text-gray-500">
-                      <span>{post.comment_count || 0} comments</span>
-                      <span>shares</span>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{post.full_name}</div>
+                    <div className="text-gray-500 text-sm">
+                      {new Date(post.created_at).toLocaleString()}
                     </div>
                   </div>
+                  {post.user_id === userData.user_id && (
+                    <div className="relative">
+                      <button
+                        onClick={() => toggleDropdown(post.post_id)}
+                        className="text-gray-500 hover:text-gray-700"
+                      >
+                        <i className="ri-more-line ri-lg"></i>
+                      </button>
+                      {dropdownOpen === post.post_id && (
+                        <div className="absolute right-0 mt-2 w-32 bg-white rounded-lg shadow-lg z-10">
+                          <button
+                            onClick={() => handleDeletePost(post.post_id)}
+                            className="block w-full px-4 py-2 text-left text-red-600 hover:bg-gray-100"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))}
-              {posts.length === 0 && (
-                <div className="text-center text-gray-500 py-6">No posts yet.</div>
-              )}
-            </div>
+                <p className="text-gray-800 mb-4">
+                  {expandedPosts[post.post_id] ? post.content : `${post.content.substring(0, 200)}...`}
+                  {post.content.length > 200 && (
+                    <button
+                      onClick={() => toggleExpand(post.post_id)}
+                      className="text-blue-600 hover:underline ml-1"
+                    >
+                      {expandedPosts[post.post_id] ? "See less" : "See more"}
+                    </button>
+                  )}
+                </p>
+                {post.images && post.images.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                    {post.images.map((image, index) => {
+                      const fullImageUrl = `/Uploads/posts/${image.split('/').pop()}`;
+                      return (
+                        <div key={index} className="relative">
+                          {imageLoaded[fullImageUrl] === undefined ? (
+                            <div className="w-full h-48 bg-gray-200 rounded-lg animate-pulse"></div>
+                          ) : (
+                            <div className="w-full h-80 bg-black flex items-center justify-center rounded-lg">
+                              <img
+                                src={
+                                  imageLoaded[fullImageUrl] ? fullImageUrl : "/Uploads/placeholder.jpg"
+                                }
+                                alt="Post Image"
+                                className="max-w-full h-80 object-contain border-l-2 border-r-2 border-gray-700 rounded-lg"
+                                onError={(e) => (e.target.src = "/Uploads/placeholder.jpg")}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <i className="ri-thumb-up-fill text-blue-600"></i>
+                    <span>{post.like_count || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-500">
+                    <span>{post.comment_count || 0} comments</span>
+                    <span>shares</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {posts.length === 0 && (
+              <div className="text-center text-gray-500 py-6">No posts yet.</div>
+            )}
           </div>
-        )}
-        {activeTab !== "posts" && (
-          <div className="p-6 text-center text-gray-500">
-            Content for {activeTab} tab coming soon...
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+      {activeTab !== "posts" && (
+        <div className="p-6 text-center text-gray-500">
+          Content for {activeTab} tab coming soon...
+        </div>
+      )}
       {selectedPost && (
         <PostDetail
           post={selectedPost}

@@ -22,7 +22,7 @@ const EditPromotions = () => {
   useEffect(() => {
     const fetchPromotion = async () => {
       try {
-        const response = await api.get(`/promotionsmana.php?id=${id}`);
+        const response = await api.get(`/promotions?id=${id}`);
         if (response.data.status === "success" && response.data.data && response.data.data.length > 0) {
           const promotion = response.data.data[0];
           setFormData({
@@ -66,10 +66,6 @@ const EditPromotions = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.code) {
-      setError("Promo code is required");
-      return;
-    }
     if (formData.discount_percentage < 0 || formData.discount_percentage > 100) {
       setError("Discount percentage must be between 0 and 100");
       return;
@@ -91,7 +87,7 @@ const EditPromotions = () => {
       is_active: formData.is_active,
     };
     try {
-      const response = await api.put(`/promotionsmana.php?id=${id}`, requestData);
+      const response = await api.put(`/promotions?id=${id}`, requestData);
       if (response.data.status === "success") {
         Toastify.success("Promotion updated successfully");
         navigate("/admin/promotions");
@@ -99,7 +95,7 @@ const EditPromotions = () => {
         setError(response.data.message || "Failed to update promotion");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update promotion");
+      setError("Failed to update promotion: " + (err.message || "Unknown error"));
       console.error(err);
     }
   };
@@ -110,103 +106,102 @@ const EditPromotions = () => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="max-w-4xl overflow-y-auto" style={{ maxHeight: "70vh" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Name</label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Promo Code</label>
-            <input
-              type="text"
-              name="code"
-              value={formData.code}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Discount (%)</label>
-            <input
-              type="number"
-              name="discount_percentage"
-              value={formData.discount_percentage}
-              onChange={handleChange}
-              required
-              min="0"
-              max="100"
-              step="0.01"
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Usage Count</label>
-            <input
-              type="number"
-              name="usage_count"
-              value={formData.usage_count}
-              onChange={handleChange}
-              required
-              min="0"
-              step="1"
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Start Date</label>
-            <input
-              type="text"
-              name="start_date"
-              value={formData.start_date}
-              onChange={handleChange}
-              required
-              placeholder="DD/MM/YYYY"
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">End Date</label>
-            <input
-              type="text"
-              name="end_date"
-              value={formData.end_date}
-              onChange={handleChange}
-              required
-              placeholder="DD/MM/YYYY"
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Status</label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="expired">Expired</option>
-            </select>
-          </div>
-          <div className="mb-4">
-            <label className="flex items-center text-gray-700 mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 mb-2">Name</label>
               <input
-                type="checkbox"
-                name="is_active"
-                checked={formData.is_active}
+                type="text"
+                name="name"
+                value={formData.name}
                 onChange={handleChange}
-                className="mr-2"
+                required
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              Active
-            </label>
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Code</label>
+              <input
+                type="text"
+                name="code"
+                value={formData.code}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Discount Percentage</label>
+              <input
+                type="number"
+                name="discount_percentage"
+                value={formData.discount_percentage}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                required
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Usage Count</label>
+              <input
+                type="number"
+                name="usage_count"
+                value={formData.usage_count}
+                onChange={handleChange}
+                min="0"
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Start Date</label>
+              <input
+                type="text"
+                name="start_date"
+                value={formData.start_date}
+                onChange={handleChange}
+                required
+                placeholder="DD/MM/YYYY"
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">End Date</label>
+              <input
+                type="text"
+                name="end_date"
+                value={formData.end_date}
+                onChange={handleChange}
+                required
+                placeholder="DD/MM/YYYY"
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2">Status</label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleChange}
+                className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="expired">Expired</option>
+              </select>
+            </div>
+            <div>
+              <label className="flex items-center text-gray-700 mb-2">
+                <input
+                  type="checkbox"
+                  name="is_active"
+                  checked={formData.is_active}
+                  onChange={handleChange}
+                  className="mr-2"
+                />
+                Active
+              </label>
+            </div>
           </div>
           <div className="flex gap-4">
             <button

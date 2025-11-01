@@ -14,7 +14,7 @@ const EditCategories = () => {
   useEffect(() => {
     const fetchCategory = async () => {
       try {
-        const response = await api.get(`/categoriesmana.php?id=${id}`);
+        const response = await api.get(`/categories?id=${id}`);
         if (
           response.data.status === "success" &&
           response.data.data.length > 0
@@ -46,7 +46,7 @@ const EditCategories = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.put(`/categoriesmana.php?id=${id}`, formData);
+      const response = await api.put(`/categories?id=${id}`, formData);
       if (response.data.status === "success") {
         navigate("/admin/categories");
       } else {

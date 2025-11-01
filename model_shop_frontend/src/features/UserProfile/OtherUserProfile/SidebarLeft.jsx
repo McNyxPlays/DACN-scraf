@@ -8,7 +8,7 @@ const SidebarLeft = ({ userData, isEditing, setUserData, className }) => {
 
   useEffect(() => {
     api
-      .get("/social_links.php")
+      .get("/social-links")
       .then((response) => {
         if (response.data.status === "success") {
           setSocialLinks(response.data.social_links);
@@ -27,7 +27,7 @@ const SidebarLeft = ({ userData, isEditing, setUserData, className }) => {
   const handleBioUpdate = () => {
     if (!isEditing) return;
     api
-      .put("/social_links.php", {
+      .put("/social-links", {
         link_id: socialLinks.length > 0 ? socialLinks[0].link_id : null,
         platform: socialLinks.length > 0 ? socialLinks[0].platform : "other",
         link_url: socialLinks.length > 0 ? socialLinks[0].link_url : "",
@@ -35,7 +35,7 @@ const SidebarLeft = ({ userData, isEditing, setUserData, className }) => {
         bio: bioInput,
       })
       .then((response) => {
-        if (response.data.status === "enter code hereuccess") {
+        if (response.data.status === "success") {
           setUserData((prev) => ({ ...prev, bio: bioInput }));
           Toastify.success("Bio updated successfully!");
         }

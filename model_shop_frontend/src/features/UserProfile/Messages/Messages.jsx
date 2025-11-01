@@ -15,7 +15,7 @@ function Messages() {
     const fetchUserAndConversations = async () => {
       setLoading(true);
       try {
-        const userResponse = await api.get("/user.php");
+        const userResponse = await api.get("/user");
         if (userResponse.data.status === "success" && userResponse.data.user) {
           setUser(userResponse.data.user);
         } else {
@@ -25,7 +25,7 @@ function Messages() {
           return;
         }
 
-        const messagesResponse = await api.get("/messages.php");
+        const messagesResponse = await api.get("/messages");
         console.log("Messages API response:", messagesResponse);
         if (messagesResponse.data && typeof messagesResponse.data.success !== "undefined") {
           if (messagesResponse.data.success) {
@@ -34,7 +34,7 @@ function Messages() {
             console.error("Failed to fetch conversations:", messagesResponse.data.message || "No message provided");
           }
         } else {
-          console.error("Invalid API response structure:", messagesResponse1, messagesResponse.data);
+          console.error("Invalid API response structure:", messagesResponse.data);
         }
       } catch (err) {
         console.error("Failed to fetch data:", err.message, err.response?.data, err.response?.status);

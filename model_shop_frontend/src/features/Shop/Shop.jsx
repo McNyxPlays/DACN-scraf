@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import FiltersSidebar from "./FiltersSidebar";
-import MobileFilterSidebar from "./MobileFilterSidebar";
 import ProductsGrid from "./ProductsGrid";
 import ShopBanner from "./ShopBanner";
 import api from "../../api/index";
@@ -23,7 +22,7 @@ function Shop() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get("/products.php?action=categories");
+        const response = await api.get("/products/categories");
         if (response.data.status === "success") {
           setCategories(response.data.data);
           setCategoryError("");
@@ -42,7 +41,7 @@ function Shop() {
 
     const fetchBrands = async () => {
       try {
-        const response = await api.get("/products.php?action=brands");
+        const response = await api.get("/products/brands");
         if (response.data.status === "success") {
           setBrands(response.data.data);
           setBrandError("");
@@ -98,12 +97,6 @@ function Shop() {
               />
             </div>
             <div className="flex-1">
-              <MobileFilterSidebar
-                filters={filters}
-                setFilters={setFilters}
-                categories={categories}
-                brands={brands}
-              />
               <ProductsGrid
                 viewMode={viewMode}
                 filters={filters}

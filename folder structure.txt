@@ -1,48 +1,57 @@
-sessionStorage
-frontend react,vite+tailwindcss+axios @fortawesome/fontawesome-svg-core @fortawesome/free-solid-svg-icons @fortawesome/react-fontawesome
-backend  mysql+xampp
+model_shop_backend/
+│  
+├───src/
+│   ├───config/
+│   │       db.js                # thay cho database.php
+│   │       functions.js         # chuyển functions.php sang JS (helper)
+│   │
+│   ├───controllers/             # thay cho các file trong /api/*.php
+│   │       authController.js        # login.php, register.php
+│   │       userController.js        # user.php, Usersmana.php, user_images.php, user_stats.php
+│   │       productController.js     # products.php, productsmana.php, product_images.php
+│   │       categoryController.js    # categoriesmana.php
+│   │       brandController.js       # brandsmana.php
+│   │       cartController.js        # carts.php, guest_carts.php
+│   │       favoriteController.js    # favorites.php
+│   │       postController.js        # posts.php, posts_images.php
+│   │       notificationController.js# notifications.php, notifications_sse.php
+│   │       promotionController.js   # promotions.php
+│   │       socialLinkController.js  # social_links.php
+│   │       countController.js       # count.php
+│   │
+│   ├───routes/
+│   │       api.js
+│   │
+│   ├───models/                   # ánh xạ bảng trong MySQL
+│   │       userModel.js
+│   │       productModel.js
+│   │       postModel.js
+│   │       cartModel.js
+│   │       favoriteModel.js
+│   │       categoryModel.js
+│   │       brandModel.js
+│   │       notificationModel.js
+│   │       promotionModel.js
+│   │       socialLinkModel.js
+│   │
+│   ├───middleware/
+│   │
+│   ├───uploads/                  # thay cho /Uploads/
+│   │   ├───avatars/
+│   │   ├───posts/
+│   │
+│   ├───logs/
+│   │       error.log
+│   │
+│   │
+│   ├───utils/
+│   │       emailService.js
+│   │       tokenService.js
+│   │       logger.js
+│   │
+│   ├───app.js                    # khởi tạo express, middleware, routes
+│   └───server.js                 # chạy server
 
-
-model_shop_backend
-│   .htaccess
-│
-├───api
-│       brandsmana.php
-│       carts.php
-│       categoriesmana.php
-│       count.php
-│       favorites.php
-│       guest_carts.php
-│       index.php
-│       login.php
-│       notifications.php
-│       notifications_sse.php
-│       posts.php
-│       posts_images.php
-│       products.php
-│       productsmana.php
-│       product_images.php
-│       promotions.php
-│       register.php
-│       social_links.php
-│       user.php
-│       Usersmana.php
-│       user_images.php
-│       user_stats.php
-│
-├───config
-│       database.php
-│       functions.php
-│
-├───includes
-├───logs
-│       error.log
-│       error_log.txt
-│
-├───public
-└───Uploads
-    ├───avatars
-    ├───posts
 
 
 model_shop_frontend
@@ -73,6 +82,15 @@ model_shop_frontend
     │   └───LoginModal
     │           LoginModal.css
     │           LoginModal.jsx
+    │
+    ├───redux
+    │     │   cartSlice.js
+    │     │   notificationSlice.js
+    │     │   store.js
+    │     │   userSlice.js
+    │
+    ├───context
+    │     │   SessionContext.jsx
     │
     ├───features
     │   ├───Admin
@@ -141,38 +159,38 @@ model_shop_frontend
     │   │       ShopBanner.jsx
     │   │
     │   └───UserProfile
-    │       ├───AccountSettings
-    │       │       AccountManagement.jsx
-    │       │       AccountSettings.jsx
-    │       │       DisplaySettings.jsx
-    │       │       NotificationSettings.jsx
-    │       │       PrivacySettings.jsx
-    │       │       ProfileSettings.jsx
-    │       │
-    │       ├───Messages
-    │       │       ConversationView.jsx
-    │       │       Messages.jsx
-    │       │       MessagesSidebar.jsx
-    │       │
-    │       ├───Notifications
-    │       │       NotificationItem.jsx
-    │       │       Notifications.jsx
-    │       │       NotificationsHeader.jsx
-    │       │       NotificationsPagination.jsx
-    │       │       NotificationsSidebar.jsx
-    │       │
-    │       ├───Order
-    │       │       OrderDetailsView.jsx
-    │       │       Orders.jsx
-    │       │       OrdersSidebar.jsx
-    │       │
-    │       └───UserProfileOverview
-    │               MainContent.jsx
-    │               ProfileBanner.jsx
-    │               ProfileStats.jsx
-    │               SidebarLeft.jsx
-    │               SidebarRight.jsx
-    │               UserProfileOverview.jsx
+    │        ├───AccountSettings
+    │        │       AccountManagement.jsx
+    │        │       AccountSettings.jsx
+    │        │       DisplaySettings.jsx
+    │        │       NotificationSettings.jsx
+    │        │       PrivacySettings.jsx
+    │        │       ProfileSettings.jsx
+    │        │
+    │        ├───Messages
+    │        │       ConversationView.jsx
+    │        │       Messages.jsx
+    │        │       MessagesSidebar.jsx
+    │        │
+    │        ├───Notifications
+    │        │       NotificationItem.jsx
+    │        │       Notifications.jsx
+    │        │       NotificationsHeader.jsx
+    │        │       NotificationsPagination.jsx
+    │        │       NotificationsSidebar.jsx
+    │        │
+    │        ├───Order
+    │        │       OrderDetailsView.jsx
+    │        │       Orders.jsx
+    │        │       OrdersSidebar.jsx
+    │        │
+    │        └───UserProfileOverview
+    │                MainContent.jsx
+    │                ProfileBanner.jsx
+    │                ProfileStats.jsx
+    │                SidebarLeft.jsx
+    │                SidebarRight.jsx
+    │                UserProfileOverview.jsx
     │
     └───styles
             App.css

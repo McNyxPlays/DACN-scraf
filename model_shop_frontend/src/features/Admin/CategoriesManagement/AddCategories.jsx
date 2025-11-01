@@ -21,7 +21,7 @@ const AddCategories = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post("/categoriesmana.php", formData);
+      const response = await api.post("/categories", formData);
       if (response.data.status === "success") {
         navigate("/admin/categories");
       } else {

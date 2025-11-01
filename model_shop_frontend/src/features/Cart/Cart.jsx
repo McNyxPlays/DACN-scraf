@@ -1,245 +1,228 @@
+// src/features/Cart/Cart.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/index";
-import { Toastify } from "../../components/Toastify";
+import { Toastify } from "../../components/Toastify"; // ← Added import for Toastify
 import CartItem from "./CartItem";
 
 function Cart({ isOpen, setIsOpen }) {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const exchangeRate = 25000; // 1 USD = 25,000 VND
-  const user = JSON.parse(sessionStorage.getItem("user"));
+  const exchangeRate = 25000;
+  const user = JSON.parse(localStorage.getItem("user"));
   const sessionKey =
-    sessionStorage.getItem("guest_session_key") ||
+    localStorage.getItem("guest_session_key") ||
     (() => {
-      const newSessionKey = `guest_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
-      sessionStorage.setItem("guest_session_key", newSessionKey);
+      const newSessionKey = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem("guest_session_key", newSessionKey);
       return newSessionKey;
     })();
   const navigate = useNavigate();
   const cartRef = useRef(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchCartItems();
+  // Helper để load guest cart từ localStorage + fetch details
+  const fetchLocalGuestCart = async () => {
+    const localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+    if (localCart.length === 0) return [];
+
+    const itemsWithDetails = await Promise.all(
+      localCart.map(async (item) => {
+        try {
+          const response = await api.get("/products/product", { params: { id: item.product_id } });
+          if (response.data.status === "success" && response.data.data) {  // Kiểm tra thêm để tránh item null
+            return { ...response.data.data, quantity: item.quantity, guest_cart_id: item.product_id }; // Giả guest_cart_id = product_id for key
+          }
+          return null;
+        } catch (err) {
+          console.warn("Failed to fetch product details for guest cart:", item.product_id, err);
+          return null;
+        }
+      })
+    );
+
+    return itemsWithDetails.filter(item => item !== null);
+  };
+
+  // === FETCH CART ===
+  const fetchCartItems = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      if (user?.user_id) {  // Kiểm tra user có user_id để chắc chắn là user hợp lệ
+        // User: Gọi API
+        const response = await api.get("/carts");
+        if (response.data.status === "success") {
+          setCartItems(response.data.items || []);
+        } else {
+          setError(response.data.message || "Failed to fetch cart.");
+        }
+      } else {
+        // Guest: Load từ local + fetch details
+        const items = await fetchLocalGuestCart();
+        setCartItems(items);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Network error.");
+    } finally {
+      setLoading(false);
     }
-    const handleCartUpdate = () => {
-      if (isOpen) {
-        setTimeout(() => {
-          fetchCartItems();
-        }, 500);
-      }
-    };
-    window.addEventListener("cartUpdated", handleCartUpdate);
-    return () => {
-      window.removeEventListener("cartUpdated", handleCartUpdate);
-    };
-  }, [isOpen]);
+  };
 
+  // === MỞ CART → FETCH ===
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (!user) {
-        api
-          .delete("/guest_carts.php", { data: { session_key: sessionKey } })
-          .catch((err) => {
-            console.error("Failed to clear guest cart on unload:", err);
-          });
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [user, sessionKey]);
+    if (isOpen) fetchCartItems();
 
+    const handleUpdate = () => {
+      if (isOpen) setTimeout(fetchCartItems, 500);  // Delay nhẹ để tránh race condition sau login/merge
+    };
+    window.addEventListener("cartUpdated", handleUpdate);
+    return () => window.removeEventListener("cartUpdated", handleUpdate);
+  }, [isOpen, user]);  // Thêm dependency user để refresh khi user thay đổi (sau login)
+
+  // === CLICK NGOÀI ĐÓNG CART ===
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (cartRef.current && !cartRef.current.contains(event.target)) {
+    const handleClickOutside = (e) => {
+      if (cartRef.current && !cartRef.current.contains(e.target)) {
         setIsOpen(false);
       }
     };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
+    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  // Helper để update guest cart trong localStorage
+  const updateLocalGuestCart = (productId, newQty) => {
+    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+    const existing = localCart.find(item => item.product_id === productId);
+    if (existing) {
+      existing.quantity = newQty;
     }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, setIsOpen]);
+    localStorage.setItem('guest_cart', JSON.stringify(localCart));
+  };
 
-const fetchCartItems = async () => {
-  if (!user && !sessionStorage.getItem("guest_session_key")) {
-    setCartItems([]);
-    setLoading(false);
-    setError("");
-    return;
-  }
+  // Helper để remove from localStorage
+  const removeFromLocalGuestCart = (productId) => {
+    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+    localCart = localCart.filter(item => item.product_id !== productId);
+    localStorage.setItem('guest_cart', JSON.stringify(localCart));
+  };
 
-  setLoading(true);
-  try {
-    const endpoint = user ? "/carts.php" : "/guest_carts.php";
-    const params = user
-      ? { user_id: user.user_id }
-      : { session_key: sessionKey };
-    const response = await api.get(endpoint, { params });
-    if (response.data.status === "success") {
-      const items = (response.data.data || []).map((item) => ({
-        ...item,
-        price: parseFloat(item.price) || 0,
-        quantity: parseInt(item.quantity, 10) || 1,
-      }));
-      setCartItems(items);
-      setError("");
+  // Helper để clear local guest cart
+  const clearLocalGuestCart = () => {
+    localStorage.removeItem('guest_cart');
+  };
+
+  // === THAY ĐỔI SỐ LƯỢNG ===
+  const handleQuantityChange = async (itemId, newQuantity) => {
+    if (user) {
+      // User: Gọi API update
+      try {
+        const endpoint = "/carts";
+        const data = { cart_id: itemId, quantity: newQuantity };
+
+        const response = await api.put(endpoint, data);
+        if (response.data.status === "success") {
+          setCartItems(prev =>
+            prev.map(i => (i.cart_id === itemId ? { ...i, quantity: newQuantity } : i))
+          );
+          Toastify.success("Quantity updated.");
+          window.dispatchEvent(new CustomEvent("cartUpdated"));
+        }
+      } catch (err) {
+        Toastify.error("Failed to update quantity.");
+      }
     } else {
-      setError(
-        `Failed to fetch cart: ${response.data.message || "Unknown error"}`
+      // Guest: Update local
+      updateLocalGuestCart(itemId, newQuantity);
+      setCartItems(prev =>
+        prev.map(i => (i.product_id === itemId ? { ...i, quantity: newQuantity } : i))
       );
-      Toastify.error(
-        `Failed to fetch cart: ${response.data.message || "Unknown error"}`
-      );
-    }
-  } catch (err) {
-    const errorMsg =
-      err.response?.data?.message || err.message || "Network or server error";
-    setError(`Failed to fetch cart: ${errorMsg}`);
-    Toastify.error(`Failed to fetch cart: ${errorMsg}`);
-    console.error("Fetch cart error:", {
-      error: err,
-      response: err.response,
-      status: err.response?.status,
-      data: err.response?.data,
-    });
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const handleQuantityChange = async (itemId, delta) => {
-    const item = cartItems.find(
-      (i) => (user ? i.cart_id : i.guest_cart_id) === itemId
-    );
-    if (!item) return;
-    const newQuantity = Math.max(1, item.quantity + delta);
-    try {
-      const payload = user
-        ? { user_id: user.user_id, cart_id: itemId, quantity: newQuantity }
-        : {
-            session_key: sessionKey,
-            guest_cart_id: itemId,
-            quantity: newQuantity,
-          };
-      const endpoint = user ? "/carts.php" : "/guest_carts.php";
-      const response = await api.put(endpoint, payload);
-      if (response.data.status === "success") {
-        const event = new CustomEvent("cartUpdated");
-        window.dispatchEvent(event);
-        // Đã xóa Toastify.success(`Updated quantity for ${item.name}`);
-      } else {
-        Toastify.error(
-          `Failed to update quantity: ${
-            response.data.message || "Unknown error"
-          }`
-        );
-      }
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || err.message || "Network or server error";
-      Toastify.error(`Failed to update quantity: ${errorMsg}`);
-      console.error("Update quantity error:", {
-        error: err,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
+      Toastify.success("Quantity updated.");
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
     }
   };
 
+  // === XÓA ITEM ===
   const handleRemoveItem = async (itemId) => {
-    try {
-      const endpoint = user ? "/carts.php" : "/guest_carts.php";
-      const payload = user
-        ? { user_id: user.user_id, cart_id: itemId }
-        : { session_key: sessionKey, guest_cart_id: itemId };
-      const response = await api.delete(endpoint, { data: payload });
-      if (response.data.status === "success") {
-        const event = new CustomEvent("cartUpdated");
-        window.dispatchEvent(event);
-        Toastify.success("Item removed from cart");
-      } else {
-        Toastify.error(
-          `Failed to remove item: ${response.data.message || "Unknown error"}`
-        );
+    if (user) {
+      // User: Gọi API delete
+      try {
+        const endpoint = "/carts";
+        const data = { cart_id: itemId };
+
+        const response = await api.delete(endpoint, { data });
+        if (response.data.status === "success") {
+          setCartItems(prev => prev.filter(i => i.cart_id !== itemId));
+          Toastify.success("Item removed.");
+          window.dispatchEvent(new CustomEvent("cartUpdated"));
+        }
+      } catch (err) {
+        Toastify.error("Failed to remove item.");
       }
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || err.message || "Network or server error";
-      Toastify.error(`Failed to remove item: ${errorMsg}`);
-      console.error("Remove item error:", {
-        error: err,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
+    } else {
+      // Guest: Remove local
+      removeFromLocalGuestCart(itemId);
+      setCartItems(prev => prev.filter(i => i.product_id !== itemId));
+      Toastify.success("Item removed.");
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
     }
   };
 
+  // === XÓA TẤT CẢ ===
   const handleRemoveAll = async () => {
-    try {
-      const endpoint = user ? "/carts.php" : "/guest_carts.php";
-      const payload = user
-        ? { user_id: user.user_id }
-        : { session_key: sessionKey };
-      await api.delete(endpoint, { data: payload });
-      const event = new CustomEvent("cartUpdated");
-      window.dispatchEvent(event);
-      Toastify.success("All items removed from cart");
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || err.message || "Network or server error";
-      Toastify.error(`Failed to remove all items: ${errorMsg}`);
-      console.error("Remove all error:", {
-        error: err,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
+    if (user) {
+      // User: Gọi API
+      try {
+        const endpoint = "/carts";
+        const data = {};
+
+        const response = await api.delete(endpoint, { data });
+        if (response.data.status === "success") {
+          setCartItems([]);
+          Toastify.success("All items removed.");
+          window.dispatchEvent(new CustomEvent("cartUpdated"));
+        }
+      } catch (err) {
+        Toastify.error("Failed to clear cart.");
+      }
+    } else {
+      // Guest: Clear local
+      clearLocalGuestCart();
+      setCartItems([]);
+      Toastify.success("All items removed.");
+      window.dispatchEvent(new CustomEvent("cartUpdated"));
     }
   };
 
-  const subtotal = cartItems.reduce(
-    (sum, item) =>
-      sum +
-      (parseFloat(item.price) || 0) *
-        exchangeRate *
-        (parseInt(item.quantity, 10) || 1),
-    0
-  );
-
+  // === CHECKOUT & CONTINUE ===
   const handleCheckout = () => {
-    navigate("/checkout");
     setIsOpen(false);
+    navigate("/checkout");
   };
 
   const handleContinueShopping = () => {
-    navigate("/shop");
     setIsOpen(false);
+    navigate("/shop");
   };
+
+  const subtotal = cartItems.reduce(
+    (sum, item) => sum + (item.price || 0) * exchangeRate * (item.quantity || 1),
+    0
+  );
 
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end"
-      onClick={() => setIsOpen(false)}
-    >
-      <div
-        ref={cartRef}
-        className="w-full md:w-80 bg-white p-6 rounded-lg shadow-lg h-screen overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-bold mb-4">Shopping Cart</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
+      <div ref={cartRef} className="bg-white w-full max-w-md h-full overflow-y-auto p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold">Shopping Cart</h2>
+          <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-700">
+            <i className="ri-close-line ri-xl"></i>
+          </button>
+        </div>
+
         {loading ? (
           <div className="text-center py-4">Loading...</div>
         ) : error ? (
@@ -251,7 +234,7 @@ const fetchCartItems = async () => {
             <div className="space-y-2 mb-4">
               {cartItems.map((item) => (
                 <CartItem
-                  key={user ? item.cart_id : item.guest_cart_id}
+                  key={user ? item.cart_id : item.product_id} // For guest, key = product_id
                   item={item}
                   user={user}
                   exchangeRate={exchangeRate}
@@ -260,6 +243,7 @@ const fetchCartItems = async () => {
                 />
               ))}
             </div>
+
             <div className="mb-4">
               <button
                 onClick={handleRemoveAll}
@@ -268,6 +252,7 @@ const fetchCartItems = async () => {
                 Remove All
               </button>
             </div>
+
             <div className="border-t pt-2">
               <div className="flex justify-between text-lg font-semibold">
                 <span>Subtotal</span>
@@ -277,6 +262,7 @@ const fetchCartItems = async () => {
                 Shipping and taxes calculated at checkout
               </p>
             </div>
+
             <div className="mt-4 space-y-2">
               <button
                 onClick={handleCheckout}

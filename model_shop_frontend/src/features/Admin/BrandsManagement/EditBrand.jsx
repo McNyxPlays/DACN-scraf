@@ -14,7 +14,7 @@ const EditBrand = () => {
   useEffect(() => {
     const fetchBrand = async () => {
       try {
-        const response = await api.get(`/brandsmana.php?id=${id}`);
+        const response = await api.get(`/brands?id=${id}`);
         if (
           response.data.status === "success" &&
           response.data.data.length > 0
@@ -46,7 +46,7 @@ const EditBrand = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.put(`/brandsmana.php?id=${id}`, formData);
+      const response = await api.put(`/brands?id=${id}`, formData);
       if (response.data.status === "success") {
         navigate("/admin/brands");
       } else {

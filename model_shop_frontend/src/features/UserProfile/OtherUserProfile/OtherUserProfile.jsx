@@ -26,7 +26,7 @@ const OtherUserProfile = () => {
 
   useEffect(() => {
     api
-      .get("/user.php")
+      .get("/user")
       .then((response) => {
         if (response.data.status === "success") {
           setCurrentUser(response.data.user);
@@ -40,7 +40,7 @@ const OtherUserProfile = () => {
 
   useEffect(() => {
     api
-      .get(`/user.php?user_id=${userId}`)
+      .get(`/user?user_id=${userId}`)
       .then((response) => {
         if (response.data.status === "success") {
           const fetchedUser = response.data.user;
@@ -59,7 +59,7 @@ const OtherUserProfile = () => {
       });
 
     api
-      .get(`/user_stats.php?user_id=${userId}`)
+      .get(`/user-stats?user_id=${userId}`)
       .then((response) => {
         if (response.data.status === "success") {
           setUserData((prev) => ({
@@ -76,67 +76,24 @@ const OtherUserProfile = () => {
       });
 
     api
-      .get(`/posts.php`, {
-        params: { limit: 10, offset: 0, user_id: userId },
-      })
-      .then(async (response) => {
+      .get(`/posts?user_id=${userId}`)
+      .then((response) => {
         if (response.data.status === "success") {
-          const postsData = response.data.posts;
-          const postsWithImages = await Promise.all(
-            postsData.map(async (post) => {
-              const imageResponse = await api.get("/posts_images.php", {
-                params: { post_id: post.post_id },
-              });
-              return {
-                ...post,
-                images: imageResponse.data.images || [],
-                full_name: userData.name,
-                profile_image: userData.profile_image,
-              };
-            })
-          );
-          setPosts(postsWithImages);
+          setPosts(response.data.posts || []);
         }
       })
       .catch((error) => {
         console.error("Error fetching posts:", error);
         Toastify.error("Failed to load posts.");
       });
-
-    api
-      .get(`/follow.php?target_user_id=${userId}`)
-      .then((response) => {
-        if (response.data.status === "success") {
-          setIsFollowing(response.data.is_following);
-        }
-      })
-      .catch((error) => {
-        console.error("Error checking follow status:", error);
-      });
-  }, [userId, userData.name, userData.profile_image]);
+  }, [userId]);
 
   const handleFollow = () => {
     if (!currentUser) {
       Toastify.error("Please log in to follow users.");
       return;
     }
-
-    api
-      .post("/follow.php", { target_user_id: userId })
-      .then((response) => {
-        if (response.data.status === "success") {
-          setIsFollowing(!isFollowing);
-          setUserData((prev) => ({
-            ...prev,
-            followers: isFollowing ? prev.followers - 1 : prev.followers + 1,
-          }));
-          Toastify.success(isFollowing ? "Unfollowed successfully!" : "Followed successfully!");
-        }
-      })
-      .catch((error) => {
-        console.error("Error following/unfollowing user:", error);
-        Toastify.error("Failed to follow/unfollow user.");
-      });
+    setIsFollowing(!isFollowing);
   };
 
   const handleMessage = () => {
@@ -147,13 +104,13 @@ const OtherUserProfile = () => {
     navigate(`/messages/${userId}`);
   };
 
-  const handleLike = async (postId, isLiked) => {
+  const handleLike = async (postId) => {
     if (!currentUser) {
       Toastify.error("Please log in to like posts.");
       return;
     }
     try {
-      const response = await api.put("/posts.php?action=like", { post_id: postId });
+      const response = await api.put(`/posts?action=like`, { post_id: postId });
       setPosts((prevPosts) =>
         prevPosts.map((post) =>
           post.post_id === postId
@@ -174,7 +131,7 @@ const OtherUserProfile = () => {
     }
     if (!content.trim()) return;
     try {
-      await api.put("/posts.php?action=comment", { post_id: postId, content });
+      await api.put(`/posts?action=comment`, { post_id: postId, content });
       setPosts((prevPosts) =>
         prevPosts.map((post) =>
           post.post_id === postId

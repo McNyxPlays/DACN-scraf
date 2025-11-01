@@ -23,7 +23,7 @@ const AddProduct = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get("/categoriesmana.php");
+        const response = await api.get("/categories");
         if (response.data.status === "success" && Array.isArray(response.data.data)) {
           setCategories(response.data.data);
         } else {
@@ -38,7 +38,7 @@ const AddProduct = () => {
 
     const fetchBrands = async () => {
       try {
-        const response = await api.get("/brandsmana.php");
+        const response = await api.get("/brands");
         if (response.data.status === "success" && Array.isArray(response.data.data)) {
           setBrands(response.data.data);
         } else {
@@ -65,70 +65,46 @@ const AddProduct = () => {
     const validImageTypes = ["image/jpeg", "image/png", "image/gif"];
     const maxSize = 5 * 1024 * 1024;
     let errorMsg = "";
-
-    for (let i = 0; i < files.length; i++) {
-      if (!validImageTypes.includes(files[i].type)) {
-        errorMsg = "Only JPEG, PNG, and GIF images are allowed";
-        break;
+    const validFiles = Array.from(files).filter((file) => {
+      if (!validImageTypes.includes(file.type)) {
+        errorMsg = "Only JPEG, PNG, GIF allowed";
+        return false;
       }
-      if (files[i].size > maxSize) {
-        errorMsg = "Each image must be less than 5MB";
-        break;
+      if (file.size > maxSize) {
+        errorMsg = "Image size exceeds 5MB";
+        return false;
       }
-    }
-
+      return true;
+    });
     if (errorMsg) {
       setError(errorMsg);
-      setImages([]);
-    } else {
-      setError("");
-      setImages(files);
-      setFormData((prev) => ({ ...prev, primary_image_index: files.length > 0 ? 0 : -1 }));
+      return;
     }
+    setImages((prev) => [...prev, ...validFiles]);
   };
 
   const handlePrimaryImageSelect = (index) => {
-    setFormData((prev) => ({ ...prev, primary_image_index: index }));
+    setFormData({ ...formData, primary_image_index: index });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (images.length === 0) {
-      setError("Please upload at least one image");
-      return;
-    }
-    if (formData.primary_image_index === -1) {
-      setError("Please select a primary image");
-      return;
-    }
-    if (formData.discount < 0 || formData.discount > 100) {
-      setError("Discount must be between 0 and 100");
-      return;
-    }
-    if (error) return;
-
-    const data = new FormData();
-    data.append("name", formData.name);
-    data.append("category_id", formData.category_id);
-    data.append("brand_id", formData.brand_id);
-    data.append("price", formData.price);
-    data.append("discount", formData.discount);
-    data.append("stock_quantity", formData.stock_quantity);
-    data.append("description", formData.description);
-    data.append("status", formData.status);
-    data.append("primary_image_index", formData.primary_image_index);
-    for (let i = 0; i < images.length; i++) {
-      data.append("images[]", images[i]);
-    }
-
     try {
-      const response = await api.post("/productsmana.php", data, {
+      const data = new FormData();
+      Object.keys(formData).forEach((key) => {
+        data.append(key, formData[key]);
+      });
+      images.forEach((image, index) => {
+        data.append(`images[${index}]`, image);
+      });
+
+      const response = await api.post("/products", data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      if (response.data.success) {
+      if (response.data.status === "success") {
         navigate("/admin/products");
       } else {
-        setError(response.data.error || "Failed to add product");
+        setError(response.data.message || "Failed to add product");
       }
     } catch (err) {
       setError("Failed to add product: " + (err.message || "Unknown error"));
@@ -142,7 +118,7 @@ const AddProduct = () => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="max-w-4xl overflow-y-auto" style={{ maxHeight: "70vh" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Name</label>
               <input
@@ -160,7 +136,6 @@ const AddProduct = () => {
                 name="category_id"
                 value={formData.category_id}
                 onChange={handleChange}
-                required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value={0}>Select Category</option>
@@ -177,7 +152,6 @@ const AddProduct = () => {
                 name="brand_id"
                 value={formData.brand_id}
                 onChange={handleChange}
-                required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value={0}>Select Brand</option>
@@ -188,8 +162,6 @@ const AddProduct = () => {
                 ))}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Price</label>
               <input
@@ -198,8 +170,6 @@ const AddProduct = () => {
                 value={formData.price}
                 onChange={handleChange}
                 required
-                min="0"
-                step="0.01"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -210,9 +180,6 @@ const AddProduct = () => {
                 name="discount"
                 value={formData.discount}
                 onChange={handleChange}
-                min="0"
-                max="100"
-                step="0.01"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -224,12 +191,9 @@ const AddProduct = () => {
                 value={formData.stock_quantity}
                 onChange={handleChange}
                 required
-                min="0"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Status</label>
               <select
@@ -239,9 +203,6 @@ const AddProduct = () => {
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="new">New</option>
-                <option value="used">Used</option>
-                <option value="custom">Custom</option>
-                <option value="hot">Hot</option>
                 <option value="available">Available</option>
                 <option value="sale">Sale</option>
               </select>

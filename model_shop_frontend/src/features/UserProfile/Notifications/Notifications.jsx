@@ -28,7 +28,7 @@ const Notifications = () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get("/notifications.php", {
+        const response = await api.get("/notifications", {
           params: { filter, category: category === "All Categories" ? "" : category, sort, page: currentPage },
           withCredentials: true,
         });
@@ -80,7 +80,7 @@ const Notifications = () => {
     }
     try {
       const response = await api.post(
-        "/notifications.php",
+        "/notifications",
         { action: "markAsRead" },
         { withCredentials: true, headers: { "Content-Type": "application/json" } }
       );
@@ -104,7 +104,7 @@ const Notifications = () => {
     }
     try {
       const response = await api.post(
-        "/notifications.php",
+        "/notifications",
         { action: "delete" },
         { withCredentials: true, headers: { "Content-Type": "application/json" } }
       );

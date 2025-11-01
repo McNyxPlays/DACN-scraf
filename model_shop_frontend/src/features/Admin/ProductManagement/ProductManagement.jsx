@@ -43,7 +43,7 @@ const ProductManagement = () => {
         brand_id: filterBrand,
         status: filterStatus,
       }).toString();
-      const response = await api.get(`/productsmana.php?${params}`);
+      const response = await api.get(`/products?${params}`);
       if (response.data.success) {
         setProducts(response.data.data || []);
       } else {
@@ -57,7 +57,7 @@ const ProductManagement = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await api.get("/categoriesmana.php");
+      const response = await api.get("/categories");
       if (response.data.status === "success") {
         setCategories(response.data.data || []);
       } else {
@@ -71,7 +71,7 @@ const ProductManagement = () => {
 
   const fetchBrands = async () => {
     try {
-      const response = await api.get("/brandsmana.php");
+      const response = await api.get("/brands");
       if (response.data.status === "success") {
         setBrands(response.data.data || []);
       } else {
@@ -83,187 +83,30 @@ const ProductManagement = () => {
     }
   };
 
-  const handleSearchChange = (e) => {
-    setSearch(e.target.value);
+  const openAddModal = () => {
+    setIsAddModalOpen(true);
+    resetForm();
   };
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "category_id") setFilterCategory(parseInt(value));
-    if (name === "brand_id") setFilterBrand(parseInt(value));
-    if (name === "status") setFilterStatus(value);
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: name === "stock_quantity" || name === "discount" || name === "primary_image_index" ? parseFloat(value) : value 
-    });
-  };
-
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    const validImageTypes = ["image/jpeg", "image/png", "image/gif"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    let errorMsg = "";
-
-    for (const file of files) {
-      if (!validImageTypes.includes(file.type)) {
-        errorMsg = "Only JPEG, PNG, and GIF images are allowed";
-        break;
-      }
-      if (file.size > maxSize) {
-        errorMsg = "Each image must be under 5MB";
-        break;
-      }
-    }
-
-    if (errorMsg) {
-      setError(errorMsg);
-      setImages([]);
-    } else {
-      setError("");
-      setImages(files);
-      setFormData((prev) => ({ ...prev, primary_image_index: files.length > 0 ? 0 : -1 }));
-    }
-  };
-
-  const handlePrimaryImageSelect = (index) => {
-    setFormData((prev) => ({ ...prev, primary_image_index: index }));
-  };
-
-  const handleRemoveExistingImage = async (imageId) => {
-    if (!window.confirm("Are you sure you want to delete this image?")) return;
+  const openEditModal = async (productId) => {
     try {
-      const response = await api.delete(`/product_images.php?id=${imageId}`);
-      if (response.data.success) {
-        setExistingImages((prev) => prev.filter((img) => img.image_id !== imageId));
-        Toastify.success("Image deleted successfully");
-      } else {
-        setError(response.data.error || "Failed to delete image");
-      }
-    } catch (err) {
-      setError("Failed to delete image: " + (err.message || "Unknown error"));
-      console.error(err);
-    }
-  };
-
-  const handleAddProduct = async (e) => {
-    e.preventDefault();
-    if (formData.discount < 0 || formData.discount > 100) {
-      setError("Discount must be between 0 and 100");
-      return;
-    }
-
-    const data = new FormData();
-    data.append("name", formData.name);
-    data.append("category_id", formData.category_id);
-    data.append("brand_id", formData.brand_id);
-    data.append("price", formData.price);
-    data.append("discount", formData.discount);
-    data.append("stock_quantity", formData.stock_quantity);
-    data.append("description", formData.description);
-    data.append("status", formData.status);
-    data.append("primary_image_index", formData.primary_image_index);
-    for (let i = 0; i < images.length; i++) {
-      data.append("images[]", images[i]);
-    }
-
-    try {
-      const response = await api.post("/productsmana.php", data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (response.data.success) {
-        Toastify.success("Product added successfully");
-        setIsAddModalOpen(false);
-        resetForm();
-        fetchProducts();
-      } else {
-        setError(response.data.error || "Failed to add product");
-      }
-    } catch (err) {
-      setError("Failed to add product: " + (err.message || "Unknown error"));
-      console.error(err);
-    }
-  };
-
-  const handleEditProduct = async (e) => {
-    e.preventDefault();
-    if (formData.discount < 0 || formData.discount > 100) {
-      setError("Discount must be between 0 and 100");
-      return;
-    }
-
-    const data = new FormData();
-    data.append("name", formData.name);
-    data.append("category_id", formData.category_id);
-    data.append("brand_id", formData.brand_id);
-    data.append("price", formData.price);
-    data.append("discount", formData.discount);
-    data.append("stock_quantity", formData.stock_quantity);
-    data.append("description", formData.description);
-    data.append("status", formData.status);
-    data.append("primary_image_index", formData.primary_image_index);
-    data.append("_method", "PUT");
-    for (let i = 0; i < images.length; i++) {
-      data.append("images[]", images[i]);
-    }
-
-    try {
-      const response = await api.post(`/productsmana.php?id=${formData.product_id}`, data, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (response.data.success) {
-        Toastify.success("Product updated successfully");
-        setIsEditModalOpen(false);
-        resetForm();
-        fetchProducts();
-      } else {
-        setError(response.data.error || "Failed to update product");
-      }
-    } catch (err) {
-      setError("Failed to update product: " + (err.message || "Unknown error"));
-      console.error(err);
-    }
-  };
-
-  const handleDeleteProduct = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?")) return;
-    try {
-      const response = await api.delete(`/productsmana.php?id=${id}`);
-      if (response.data.success) {
-        Toastify.success("Product deleted successfully");
-        fetchProducts();
-      } else {
-        setError(response.data.error || "Failed to delete product");
-      }
-    } catch (err) {
-      setError("Failed to delete product: " + (err.message || "Unknown error"));
-      console.error(err);
-    }
-  };
-
-  const openEditModal = async (product) => {
-    try {
-      const response = await api.get(`/productsmana.php?id=${product.product_id}`);
-      if (response.data.success && response.data.data && response.data.data.length > 0) {
-        const prod = response.data.data[0];
+      const response = await api.get(`/products?id=${productId}`);
+      if (response.data.success && response.data.data.length > 0) {
+        const product = response.data.data[0];
         setFormData({
-          product_id: prod.product_id,
-          name: prod.name || "",
-          category_id: prod.category_id || 0,
-          brand_id: prod.brand_id || 0,
-          price: prod.price || "",
-          discount: prod.discount || 0,
-          stock_quantity: prod.stock_quantity || 0,
-          description: prod.description || "",
-          status: prod.status || "new",
+          product_id: product.product_id,
+          name: product.name,
+          category_id: product.category_id,
+          brand_id: product.brand_id,
+          price: product.price,
+          discount: product.discount,
+          stock_quantity: product.stock_quantity,
+          description: product.description,
+          status: product.status,
           primary_image_index: -1,
         });
-        setExistingImages(prod.images || []);
+        setExistingImages(product.images || []);
         setImages([]);
-        setError("");
         setIsEditModalOpen(true);
       } else {
         setError("Product not found");
@@ -292,25 +135,182 @@ const ProductManagement = () => {
     setError("");
   };
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: name === "stock_quantity" || name === "primary_image_index" ? parseInt(value) : value,
+    });
+  };
+
+  const handleImageChange = (e) => {
+    const files = e.target.files;
+    const validImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    const maxSize = 5 * 1024 * 1024;
+    let errorMsg = "";
+    const newImages = Array.from(files).filter((file) => {
+      if (!validImageTypes.includes(file.type)) {
+        errorMsg = "Invalid file type. Only JPEG, PNG, GIF, WEBP allowed.";
+        return false;
+      }
+      if (file.size > maxSize) {
+        errorMsg = "File too large. Max size 5MB.";
+        return false;
+      }
+      return true;
+    });
+    if (errorMsg) {
+      setError(errorMsg);
+      return;
+    }
+    setImages((prev) => [...prev, ...newImages]);
+    setFormData({ ...formData, primary_image_index: existingImages.length });
+  };
+
+  const handlePrimaryImageSelect = (index) => {
+    setFormData({ ...formData, primary_image_index: index });
+  };
+
+  const handleRemoveImage = (index) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveExistingImage = async (imageId) => {
+    try {
+      const response = await api.delete(`/products-images?id=${imageId}`);
+      if (response.data.success) {
+        setExistingImages((prev) => prev.filter((img) => img.image_id !== imageId));
+        Toastify.success("Image removed successfully");
+      } else {
+        setError(response.data.message || "Failed to remove image");
+      }
+    } catch (err) {
+      setError("Failed to remove image: " + (err.message || "Unknown error"));
+      console.error(err);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.discount < 0 || formData.discount > 100) {
+      setError("Discount must be between 0 and 100");
+      return;
+    }
+    if (formData.primary_image_index === -1 && images.length > 0) {
+      setFormData({ ...formData, primary_image_index: 0 });
+    }
+    const requestData = new FormData();
+    Object.keys(formData).forEach((key) => {
+      requestData.append(key, formData[key]);
+    });
+    images.forEach((image, index) => {
+      requestData.append(`images[${index}]`, image);
+    });
+    try {
+      const response = await api.post("/products", requestData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (response.data.success) {
+        setIsAddModalOpen(false);
+        resetForm();
+        fetchProducts();
+      } else {
+        setError(response.data.message || "Failed to add product");
+      }
+    } catch (err) {
+      if (err.response && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Failed to add product");
+      }
+      console.error(err);
+    }
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (formData.discount < 0 || formData.discount > 100) {
+      setError("Discount must be between 0 and 100");
+      return;
+    }
+    if (formData.primary_image_index === -1 && images.length > 0) {
+      setFormData({ ...formData, primary_image_index: 0 });
+    }
+    const requestData = new FormData();
+    Object.keys(formData).forEach((key) => {
+      requestData.append(key, formData[key]);
+    });
+    images.forEach((image, index) => {
+      requestData.append(`images[${index}]`, image);
+    });
+    try {
+      const response = await api.put(`/products?id=${formData.product_id}`, requestData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (response.data.success) {
+        setIsEditModalOpen(false);
+        resetForm();
+        fetchProducts();
+      } else {
+        setError(response.data.message || "Failed to update product");
+      }
+    } catch (err) {
+      if (err.response && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Failed to update product");
+      }
+      console.error(err);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this product?")) return;
+    try {
+      const response = await api.delete(`/products?id=${id}`);
+      if (response.data.success) {
+        fetchProducts();
+      } else {
+        setError(response.data.message || "Failed to delete product");
+      }
+    } catch (err) {
+      setError("Failed to delete product: " + (err.message || "Unknown error"));
+      console.error(err);
+    }
+  };
+
+  if (error) {
+    return <p className="text-red-500 text-center">{error}</p>;
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Product Management</h1>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-
-      {/* Filters */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <h1 className="text-2xl font-bold mb-4 md:mb-0">Product Management</h1>
+        <button
+          onClick={openAddModal}
+          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
+        >
+          Add Product
+        </button>
+      </div>
       <div className="mb-6 flex flex-col md:flex-row gap-4">
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={search}
-          onChange={handleSearchChange}
-          className="px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-        />
+        <div className="relative flex-1">
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary pl-10"
+          />
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <FaSearch />
+          </div>
+        </div>
         <select
-          name="category_id"
           value={filterCategory}
-          onChange={handleFilterChange}
-          className="px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          onChange={(e) => setFilterCategory(parseInt(e.target.value))}
+          className="px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value={0}>All Categories</option>
           {categories.map((category) => (
@@ -320,10 +320,9 @@ const ProductManagement = () => {
           ))}
         </select>
         <select
-          name="brand_id"
           value={filterBrand}
-          onChange={handleFilterChange}
-          className="px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          onChange={(e) => setFilterBrand(parseInt(e.target.value))}
+          className="px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value={0}>All Brands</option>
           {brands.map((brand) => (
@@ -333,203 +332,187 @@ const ProductManagement = () => {
           ))}
         </select>
         <select
-          name="status"
           value={filterStatus}
-          onChange={handleFilterChange}
-          className="px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
         >
-          <option value="">All Statuses</option>
+          <option value="">All Status</option>
           <option value="new">New</option>
-          <option value="used">Used</option>
-          <option value="custom">Custom</option>
-          <option value="hot">Hot</option>
           <option value="available">Available</option>
           <option value="sale">Sale</option>
         </select>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
-        >
-          Add Product
-        </button>
       </div>
-
-      {/* Product Table */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border">
-          <thead>
-            <tr>
-              <th className="px-4 py-2 border">ID</th>
-              <th className="px-4 py-2 border">Name</th>
-              <th className="px-4 py-2 border">Category</th>
-              <th className="px-4 py-2 border">Brand</th>
-              <th className="px-4 py-2 border">Price</th>
-              <th className="px-4 py-2 border">Discount</th>
-              <th className="px-4 py-2 border">Stock</th>
-              <th className="px-4 py-2 border">Status</th>
-              <th className="px-4 py-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((product) => (
-              <tr key={product.product_id}>
-                <td className="px-4 py-2 border">{product.product_id}</td>
-                <td className="px-4 py-2 border">{product.name}</td>
-                <td className="px-4 py-2 border">{product.category_name}</td>
-                <td className="px-4 py-2 border">{product.brand_name}</td>
-                <td className="px-4 py-2 border">{product.price}</td>
-                <td className="px-4 py-2 border">{product.discount}%</td>
-                <td className="px-4 py-2 border">{product.stock_quantity}</td>
-                <td className="px-4 py-2 border">{product.status}</td>
-                <td className="px-4 py-2 border flex gap-2">
-                  <button
-                    onClick={() => openEditModal(product)}
-                    className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteProduct(product.product_id)}
-                    className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                </td>
+      {products.length === 0 ? (
+        <p className="text-gray-500 text-center">No products found.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-gray-200">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">ID</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Name</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Category</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Brand</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Price</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Discount</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Stock</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Status</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Created At</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Updated At</th>
+                <th className="py-3 px-4 text-left font-semibold text-gray-700">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.product_id} className="border-b">
+                  <td className="py-3 px-4">{product.product_id}</td>
+                  <td className="py-3 px-4">{product.name}</td>
+                  <td className="py-3 px-4">{product.category_name}</td>
+                  <td className="py-3 px-4">{product.brand_name}</td>
+                  <td className="py-3 px-4">{product.price}</td>
+                  <td className="py-3 px-4">{product.discount}%</td>
+                  <td className="py-3 px-4">{product.stock_quantity}</td>
+                  <td className="py-3 px-4">{product.status}</td>
+                  <td className="py-3 px-4">{new Date(product.created_at).toLocaleString()}</td>
+                  <td className="py-3 px-4">{new Date(product.updated_at).toLocaleString()}</td>
+                  <td className="py-3 px-4 flex gap-2">
+                    <button
+                      onClick={() => openEditModal(product.product_id)}
+                      className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(product.product_id)}
+                      className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* Add Product Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Add Product</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
+            <h2 className="text-xl font-bold mb-4">Add New Product</h2>
             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <form onSubmit={handleAddProduct} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Category</label>
-                  <select
-                    name="category_id"
-                    value={formData.category_id}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value={0}>Select Category</option>
-                    {categories.map((category) => (
-                      <option key={category.category_id} value={category.category_id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Brand</label>
-                  <select
-                    name="brand_id"
-                    value={formData.brand_id}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value={0}>Select Brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand.brand_id} value={brand.brand_id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Price</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleFormChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Discount (%)</label>
-                  <input
-                    type="number"
-                    name="discount"
-                    value={formData.discount}
-                    onChange={handleFormChange}
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Stock Quantity</label>
-                  <input
-                    type="number"
-                    name="stock_quantity"
-                    value={formData.stock_quantity}
-                    onChange={handleFormChange}
-                    required
-                    min="0"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Category</label>
+                <select
+                  name="category_id"
+                  value={formData.category_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((category) => (
+                    <option key={category.category_id} value={category.category_id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="new">New</option>
-                    <option value="used">Used</option>
-                    <option value="custom">Custom</option>
-                    <option value="hot">Hot</option>
-                    <option value="available">Available</option>
-                    <option value="sale">Sale</option>
-                  </select>
-                </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Brand</label>
+                <select
+                  name="brand_id"
+                  value={formData.brand_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand.brand_id} value={brand.brand_id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Discount (%)</label>
+                <input
+                  type="number"
+                  name="discount"
+                  value={formData.discount}
+                  onChange={handleChange}
+                  min="0"
+                  max="100"
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Stock Quantity</label>
+                <input
+                  type="number"
+                  name="stock_quantity"
+                  value={formData.stock_quantity}
+                  onChange={handleChange}
+                  min="0"
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
                 <label className="block text-gray-700 mb-2">Description</label>
                 <textarea
                   name="description"
                   value={formData.description}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary h-24"
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                  rows="4"
                 />
               </div>
-              <div>
-                <label className="block text-gray-700 mb-2">Images</label>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Status</label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="new">New</option>
+                  <option value="available">Available</option>
+                  <option value="sale">Sale</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Upload Images</label>
                 <input
                   type="file"
                   multiple
-                  accept="image/jpeg,image/png,image/gif"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleImageChange}
-                  className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {images.length > 0 && (
                   <div className="mt-2 overflow-x-auto flex gap-2">
@@ -576,135 +559,123 @@ const ProductManagement = () => {
         </div>
       )}
 
-      {/* Edit Product Modal */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full">
             <h2 className="text-xl font-bold mb-4">Edit Product</h2>
             {error && <p className="text-red-500 mb-4">{error}</p>}
-            <form onSubmit={handleEditProduct} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Category</label>
-                  <select
-                    name="category_id"
-                    value={formData.category_id}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value={0}>Select Category</option>
-                    {categories.map((category) => (
-                      <option key={category.category_id} value={category.category_id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Brand</label>
-                  <select
-                    name="brand_id"
-                    value={formData.brand_id}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value={0}>Select Brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand.brand_id} value={brand.brand_id}>
-                        {brand.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            <form onSubmit={handleUpdate}>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Price</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleFormChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Discount (%)</label>
-                  <input
-                    type="number"
-                    name="discount"
-                    value={formData.discount}
-                    onChange={handleFormChange}
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-700 mb-2">Stock Quantity</label>
-                  <input
-                    type="number"
-                    name="stock_quantity"
-                    value={formData.stock_quantity}
-                    onChange={handleFormChange}
-                    required
-                    min="0"
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Category</label>
+                <select
+                  name="category_id"
+                  value={formData.category_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((category) => (
+                    <option key={category.category_id} value={category.category_id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="new">New</option>
-                    <option value="used">Used</option>
-                    <option value="custom">Custom</option>
-                    <option value="hot">Hot</option>
-                    <option value="available">Available</option>
-                    <option value="sale">Sale</option>
-                  </select>
-                </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Brand</label>
+                <select
+                  name="brand_id"
+                  value={formData.brand_id}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand.brand_id} value={brand.brand_id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Price</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Discount (%)</label>
+                <input
+                  type="number"
+                  name="discount"
+                  value={formData.discount}
+                  onChange={handleChange}
+                  min="0"
+                  max="100"
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Stock Quantity</label>
+                <input
+                  type="number"
+                  name="stock_quantity"
+                  value={formData.stock_quantity}
+                  onChange={handleChange}
+                  min="0"
+                  required
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+              <div className="mb-4">
                 <label className="block text-gray-700 mb-2">Description</label>
                 <textarea
                   name="description"
                   value={formData.description}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary h-24"
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                  rows="4"
                 />
               </div>
-              <div>
-                <label className="block text-gray-700 mb-2">New Images</label>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Status</label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="new">New</option>
+                  <option value="available">Available</option>
+                  <option value="sale">Sale</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label className="block text-gray-700 mb-2">Upload New Images</label>
                 <input
                   type="file"
                   multiple
-                  accept="image/jpeg,image/png,image/gif"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleImageChange}
-                  className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {images.length > 0 && (
                   <div className="mt-2 overflow-x-auto flex gap-2">

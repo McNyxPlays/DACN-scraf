@@ -3,6 +3,8 @@ import { NavLink } from "react-router-dom";
 import styles from "../../styles/CommunityHub.module.css";
 import api from "../../api/index";
 
+const BASE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+
 function RightSidebar({ user }) {
   const [userData, setUserData] = useState(null);
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 });
@@ -11,8 +13,8 @@ function RightSidebar({ user }) {
     const fetchUserData = async () => {
       if (user && user.user_id) {
         try {
-          const userResponse = await api.get("/user.php");
-          const statsResponse = await api.get("/user_stats.php");
+          const userResponse = await api.get("/user");
+          const statsResponse = await api.get("/user/stats"); // Fix endpoint
           setUserData(userResponse.data.user);
           setStats({
             followers: statsResponse.data.followers,
@@ -34,7 +36,7 @@ function RightSidebar({ user }) {
         <div className="flex items-center gap-3 mb-4">
           {userData?.profile_image ? (
             <img
-              src={`http://localhost:8080/${userData.profile_image}`}
+              src={`${BASE_BACKEND_URL}/${userData.profile_image}`} // Fix src
               alt="User Profile"
               className="w-12 h-12 rounded-full object-cover"
             />
@@ -52,25 +54,47 @@ function RightSidebar({ user }) {
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="bg-gray-100 rounded p-2 text-center">
             <div className="font-bold text-gray-900">{stats.posts}</div>
-            <div className="text-xs text-gray-600">Posts</div>
+            <div className="text-xs text-gray-500">Posts</div>
           </div>
           <div className="bg-gray-100 rounded p-2 text-center">
             <div className="font-bold text-gray-900">{stats.followers}</div>
-            <div className="text-xs text-gray-600">Followers</div>
+            <div className="text-xs text-gray-500">Followers</div>
           </div>
         </div>
-        <div className="flex justify-center">
-          <NavLink
-            to="/profile"
-            className="bg-gray-100 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-200 transition whitespace-nowrap"
+        <NavLink
+          to="/profile"
+          className="block text-center text-primary font-medium hover:underline"
+        >
+          View Profile
+        </NavLink>
+      </div>
+      <div className="bg-white rounded-lg shadow-sm p-4">
+        <h3 className="font-semibold text-gray-900 mb-4 px-2">
+          Trending Topics
+        </h3>
+        <div className="space-y-3">
+          <div className="flex gap-3 p-2 hover:bg-gray-50 rounded-lg">
+            <div className="w-10 h-10 flex items-center justify-center bg-primary/10 text-primary rounded-full flex-shrink-0">
+              <i className="ri-hashtag"></i>
+            </div>
+            <div>
+              <h4 className="font-medium text-gray-900 text-sm">#ModelKits</h4>
+              <div className="text-xs text-gray-500">1.2k posts</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 text-center">
+          <a
+            href="#"
+            className="text-primary text-sm font-medium hover:underline"
           >
-            <i className="ri-user-settings-line mr-1"></i>Edit Profile
-          </NavLink>
+            View More
+          </a>
         </div>
       </div>
       <div className="bg-white rounded-lg shadow-sm p-4">
         <h3 className="font-semibold text-gray-900 mb-4 px-2">
-          Active Discussions
+          Popular Discussions
         </h3>
         <div className="space-y-3">
           <div className="flex gap-3 p-2 hover:bg-gray-50 rounded-lg">

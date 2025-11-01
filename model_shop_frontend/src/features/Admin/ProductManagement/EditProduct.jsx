@@ -26,7 +26,7 @@ const EditProduct = () => {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const response = await api.get(`/productsmana.php?id=${id}`);
+        const response = await api.get(`/products?id=${id}`);
         if (response.data.success && response.data.data && response.data.data.length > 0) {
           const product = response.data.data[0];
           setFormData({
@@ -52,7 +52,7 @@ const EditProduct = () => {
 
     const fetchCategories = async () => {
       try {
-        const response = await api.get("/categoriesmana.php");
+        const response = await api.get("/categories");
         if (response.data.status === "success" && Array.isArray(response.data.data)) {
           setCategories(response.data.data);
         } else {
@@ -67,7 +67,7 @@ const EditProduct = () => {
 
     const fetchBrands = async () => {
       try {
-        const response = await api.get("/brandsmana.php");
+        const response = await api.get("/brands");
         if (response.data.status === "success" && Array.isArray(response.data.data)) {
           setBrands(response.data.data);
         } else {
@@ -75,7 +75,7 @@ const EditProduct = () => {
           setError("Invalid brands response format");
         }
       } catch (err) {
-        setError("Failed to fetch brands: " + (err.message || "Unknown error") + err);
+        setError("Failed to fetch brands: " + (err.message || "Unknown error"));
         console.error(err);
       }
     };
@@ -87,99 +87,72 @@ const EditProduct = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ 
-      ...formData, 
-      [name]: name === "stock_quantity" || name === "discount" || name === "primary_image_index" ? parseFloat(value) : value 
-    });
+    setFormData({ ...formData, [name]: name === "stock_quantity" || name === "primary_image_index" ? parseInt(value) : value });
   };
 
   const handleImageChange = (e) => {
     const files = e.target.files;
     const validImageTypes = ["image/jpeg", "image/png", "image/gif"];
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 5 * 1024 * 1024;
     let errorMsg = "";
-
-    for (let i = 0; i < files.length; i++) {
-      if (!validImageTypes.includes(files[i].type)) {
-        errorMsg = "Only JPEG, PNG, and GIF images are allowed";
-        break;
+    const validFiles = Array.from(files).filter((file) => {
+      if (!validImageTypes.includes(file.type)) {
+        errorMsg = "Only JPEG, PNG, GIF allowed";
+        return false;
       }
-      if (files[i].size > maxSize) {
-        errorMsg = "Each image must be less than 5MB";
-        break;
+      if (file.size > maxSize) {
+        errorMsg = "Image size exceeds 5MB";
+        return false;
       }
-    }
-
+      return true;
+    });
     if (errorMsg) {
       setError(errorMsg);
-      setImages([]);
-    } else {
-      setError("");
-      setImages(Array.from(files)); // Convert FileList to array
-      setFormData((prev) => ({ ...prev, primary_image_index: files.length > 0 ? 0 : -1 }));
+      return;
     }
+    setImages((prev) => [...prev, ...validFiles]);
   };
 
   const handlePrimaryImageSelect = (index) => {
-    setFormData((prev) => ({ ...prev, primary_image_index: index }));
+    setFormData({ ...formData, primary_image_index: index });
   };
 
   const handleRemoveExistingImage = async (imageId) => {
-    if (!window.confirm("Are you sure you want to delete this image?")) return;
     try {
-      const response = await api.delete(`/product_images.php?id=${imageId}`);
-      if (response.data.success) {
+      const response = await api.delete(`/products/images?id=${imageId}`);
+      if (response.data.status === "success") {
         setExistingImages((prev) => prev.filter((img) => img.image_id !== imageId));
-        Toastify.success("Image deleted successfully");
-        setError("");
+        Toastify.success("Image removed successfully!");
       } else {
-        setError(response.data.error || "Failed to delete image");
+        setError(response.data.message || "Failed to remove image");
       }
     } catch (err) {
-      setError("Failed to delete image: " + (err.message || "Unknown error"));
+      setError("Failed to remove image: " + (err.message || "Unknown error"));
       console.error(err);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (images.length > 0 && error) return;
-    if (formData.discount < 0 || formData.discount > 100) {
-      setError("Discount must be between 0 and 100");
-      return;
-    }
-
-    const data = new FormData();
-    data.append("name", formData.name);
-    data.append("category_id", formData.category_id);
-    data.append("brand_id", formData.brand_id);
-    data.append("price", formData.price);
-    data.append("discount", formData.discount);
-    data.append("stock_quantity", formData.stock_quantity);
-    data.append("description", formData.description);
-    data.append("status", formData.status);
-    data.append("primary_image_index", formData.primary_image_index);
-    data.append("_method", "PUT");
-    for (let i = 0; i < images.length; i++) {
-      data.append("images[]", images[i]);
-    }
-
     try {
-      const response = await api.post(`/productsmana.php?id=${id}`, data, {
+      const data = new FormData();
+      Object.keys(formData).forEach((key) => {
+        data.append(key, formData[key]);
+      });
+      images.forEach((image, index) => {
+        data.append(`images[${index}]`, image);
+      });
+
+      const response = await api.put(`/products?id=${id}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      if (response.data.success) {
-        Toastify.success("Product updated successfully");
+      if (response.data.status === "success") {
         navigate("/admin/products");
       } else {
-        setError(response.data.error || "Failed to update product");
+        setError(response.data.message || "Failed to update product");
       }
     } catch (err) {
-      if (err.response && err.response.data.error) {
-        setError(err.response.data.error);
-      } else {
-        setError("Failed to update product: " + (err.message || "Unknown error"));
-      }
+      setError("Failed to update product: " + (err.message || "Unknown error"));
       console.error(err);
     }
   };
@@ -190,7 +163,7 @@ const EditProduct = () => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="max-w-4xl overflow-y-auto" style={{ maxHeight: "70vh" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Name</label>
               <input
@@ -208,7 +181,6 @@ const EditProduct = () => {
                 name="category_id"
                 value={formData.category_id}
                 onChange={handleChange}
-                required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value={0}>Select Category</option>
@@ -225,7 +197,6 @@ const EditProduct = () => {
                 name="brand_id"
                 value={formData.brand_id}
                 onChange={handleChange}
-                required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value={0}>Select Brand</option>
@@ -236,8 +207,6 @@ const EditProduct = () => {
                 ))}
               </select>
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Price</label>
               <input
@@ -246,8 +215,6 @@ const EditProduct = () => {
                 value={formData.price}
                 onChange={handleChange}
                 required
-                min="0"
-                step="0.01"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -258,9 +225,6 @@ const EditProduct = () => {
                 name="discount"
                 value={formData.discount}
                 onChange={handleChange}
-                min="0"
-                max="100"
-                step="0.01"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -272,12 +236,9 @@ const EditProduct = () => {
                 value={formData.stock_quantity}
                 onChange={handleChange}
                 required
-                min="0"
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Status</label>
               <select
@@ -287,9 +248,6 @@ const EditProduct = () => {
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="new">New</option>
-                <option value="used">Used</option>
-                <option value="custom">Custom</option>
-                <option value="hot">Hot</option>
                 <option value="available">Available</option>
                 <option value="sale">Sale</option>
               </select>
@@ -305,7 +263,7 @@ const EditProduct = () => {
             />
           </div>
           <div>
-            <label className="block text-gray-700 mb-2">New Images</label>
+            <label className="block text-gray-700 mb-2">Upload New Images</label>
             <input
               type="file"
               multiple
@@ -315,20 +273,22 @@ const EditProduct = () => {
             />
             {images.length > 0 && (
               <div className="mt-2 overflow-x-auto flex gap-2">
-                {images.slice(0, 4).map((img, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={URL.createObjectURL(img)}
-                      alt={`Preview ${index}`}
-                      className={`w-20 h-20 object-cover rounded-lg border-2 ${
-                        formData.primary_image_index === index
-                          ? "border-primary"
-                          : "border-gray-200"
-                      }`}
-                      onClick={() => handlePrimaryImageSelect(index)}
-                    />
-                  </div>
-                ))}
+                {Array.from(images)
+                  .slice(0, 4)
+                  .map((img, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={URL.createObjectURL(img)}
+                        alt={`Preview ${index}`}
+                        className={`w-20 h-20 object-cover rounded-lg border-2 ${
+                          formData.primary_image_index === index
+                            ? "border-primary"
+                            : "border-gray-200"
+                        }`}
+                        onClick={() => handlePrimaryImageSelect(index)}
+                      />
+                    </div>
+                  ))}
                 {images.length > 4 && (
                   <span className="text-gray-500">+{images.length - 4} more</span>
                 )}

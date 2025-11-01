@@ -1,0 +1,5 @@
+1. mở 2 tap vscode(frontend và backend)
+2. cả 2 bên chạy :npm install
+3. chạy xampp và chèn database
+4. backend chạy :npm start
+   forntend chạy :npm run dev

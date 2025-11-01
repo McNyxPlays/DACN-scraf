@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, NavLink, useOutletContext } from "react-router-dom";
 import api from "../../api/index";
-import UserManagement from "./UserManagement/UserManagement";
-import AddUser from "./UserManagement/AddUser";
-import EditUser from "./UserManagement/EditUser";
-import ProductManagement from "./ProductManagement/ProductManagement";
-import AddProduct from "./ProductManagement/AddProduct";
-import EditProduct from "./ProductManagement/EditProduct";
-import CategoriesManagement from "./CategoriesManagement/CategoriesManagement";
-import AddCategories from "./CategoriesManagement/AddCategories";
-import EditCategories from "./CategoriesManagement/EditCategories";
-import BrandsManagement from "./BrandsManagement/BrandsManagement";
-import AddBrand from "./BrandsManagement/AddBrand";
-import EditBrand from "./BrandsManagement/EditBrand";
-import PromotionsManagement from "./PromotionsManagement/PromotionsManagement";
-import AddPromotions from "./PromotionsManagement/AddPromotions";
-import EditPromotions from "./PromotionsManagement/EditPromotions";
-import ErrorBoundary from "./ErrorBoundary";
+// import UserManagement from "./UserManagement/UserManagement";
+// import AddUser from "./UserManagement/AddUser";
+// import EditUser from "./UserManagement/EditUser";
+// import ProductManagement from "./ProductManagement/ProductManagement";
+// import AddProduct from "./ProductManagement/AddProduct";
+// import EditProduct from "./ProductManagement/EditProduct";
+// import CategoriesManagement from "./CategoriesManagement/CategoriesManagement";
+// import AddCategories from "./CategoriesManagement/AddCategories";
+// import EditCategories from "./CategoriesManagement/EditCategories";
+// import BrandsManagement from "./BrandsManagement/BrandsManagement";
+// import AddBrand from "./BrandsManagement/AddBrand";
+// import EditBrand from "./BrandsManagement/EditBrand";
+// import PromotionsManagement from "./PromotionsManagement/PromotionsManagement";
+// import AddPromotions from "./PromotionsManagement/AddPromotions";
+// import EditPromotions from "./PromotionsManagement/EditPromotions";
+// import ErrorBoundary from "./ErrorBoundary";
 
 const Admin = () => {
   const { user } = useOutletContext() || {};
@@ -32,7 +32,7 @@ const Admin = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await api.get("/count.php");
+        const response = await api.get("/stats");
         if (response.data.status === "success") {
           setStats({
             users: response.data.data.users || 0,

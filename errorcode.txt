@@ -1,0 +1,16 @@
+================================================================================================================
+| Mã lỗi  | Tên lỗi               | Mô tả                          | Ví dụ                                     |
+| ------- | --------------------- | ------------------------------ | ----------------------------------------- |
+| **400** | Bad Request           | Request sai format             | Thiếu trường `email` khi đăng ký          |
+| **401** | Unauthorized          | Chưa đăng nhập / token sai     | Truy cập `/profile` mà không có JWT       |
+| **403** | Forbidden             | Không có quyền                 | Tài khoản thường muốn vào admin           |
+| **404** | Not Found             | Không tìm thấy tài nguyên      | API hoặc file không tồn tại               |
+| **405** | Method Not Allowed    | Sai phương thức HTTP           | Gửi `GET` vào endpoint chỉ hỗ trợ `POST`  |
+| **409** | Conflict              | Dữ liệu trùng lặp              | Email đã tồn tại khi đăng ký              |
+| **422** | Unprocessable Entity  | Dữ liệu hợp lệ nhưng xử lý lỗi | Form hợp lệ nhưng database không ghi được |
+| **429** | Too Many Requests     | Gửi request quá nhiều          | Spam API                                  |
+| **500** | Internal Server Error | Lỗi backend (PHP crash)        | Gọi hàm lỗi hoặc query lỗi                |
+| **503** | Service Unavailable   | Server bảo trì                 | Dừng tạm thời để nâng cấp                 |
+================================================================================================================
+
+

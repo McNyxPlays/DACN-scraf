@@ -1,3 +1,4 @@
+// src/features/Cart/CartItem.jsx
 import React from "react";
 
 function CartItem({ item, user, exchangeRate, onQuantityChange, onRemove }) {
@@ -13,8 +14,8 @@ function CartItem({ item, user, exchangeRate, onQuantityChange, onRemove }) {
       ? item.quantity
       : 1;
 
-  // Chỉ hiển thị giá mặc định của sản phẩm, không nhân với số lượng
-  const itemPrice = price * rate;
+  // GIÁ HIỂN THỊ: price × rate × quantity
+  const itemPrice = price * rate * quantity;
 
   const handleIncrement = () => onQuantityChange(itemId, 1);
   const handleDecrement = () => onQuantityChange(itemId, -1);

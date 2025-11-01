@@ -9,7 +9,7 @@ const OrderStatus = () => {
 
   const handleCheckStatus = async () => {
     try {
-      const response = await api.get("/orders.php", {
+      const response = await api.get("/orders", {
         params: { action: "status", order_code: orderCode },
       });
       if (response.data.status === "success") {
@@ -31,7 +31,7 @@ const OrderStatus = () => {
 
   const handleCheckInvoice = async () => {
     try {
-      const response = await api.get("/orders.php", {
+      const response = await api.get("/orders", {
         params: { action: "invoice", order_code: orderCode },
       });
       if (response.data.status === "success") {

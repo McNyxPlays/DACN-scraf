@@ -7,7 +7,7 @@ const NotificationItem = ({ notification, onMarkAsRead }) => {
     if (notification.read) return;
     try {
       const response = await api.post(
-        "/notifications.php",
+        "/notifications",
         { action: "markSingleAsRead", notification_id: notification.id },
         { withCredentials: true, headers: { "Content-Type": "application/json" } }
       );

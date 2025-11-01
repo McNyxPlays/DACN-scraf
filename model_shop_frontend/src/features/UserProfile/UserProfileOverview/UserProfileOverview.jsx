@@ -29,7 +29,7 @@ const UserProfileOverview = ({ user }) => {
 
   useEffect(() => {
     api
-      .get("/user.php")
+      .get("/user")
       .then((response) => {
         if (response.data.status === "success") {
           const fetchedUser = response.data.user;
@@ -55,7 +55,7 @@ const UserProfileOverview = ({ user }) => {
       });
 
     api
-      .get("/user_stats.php")
+      .get("/user-stats")
       .then((response) => {
         if (response.data.status === "success") {
           setUserData((prev) => ({

@@ -15,7 +15,7 @@ function Favorites() {
     const validateUser = async () => {
       if (user && user.user_id) {
         try {
-          const response = await api.get("/user.php");
+          const response = await api.get("/user");
           if (response.data.status === "success" && response.data.user) {
             setUser(response.data.user);
             sessionStorage.setItem("user", JSON.stringify(response.data.user));
@@ -47,7 +47,7 @@ function Favorites() {
     const fetchFavorites = async () => {
       setLoading(true);
       try {
-        const response = await api.get("/favorites.php", {
+        const response = await api.get("/favorites", {
           params: { user_id: user.user_id },
         });
         if (response.data.status === "success") {
@@ -104,7 +104,7 @@ function Favorites() {
       return;
     }
     try {
-      const response = await api.delete("/favorites.php", {
+      const response = await api.delete("/favorites", {
         data: { saved_id: savedId, user_id: user.user_id },
       });
       if (response.data.status === "success") {

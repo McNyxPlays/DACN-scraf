@@ -21,7 +21,7 @@ const AddBrand = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post("/brandsmana.php", formData);
+      const response = await api.post("/brands", formData);
       if (response.data.status === "success") {
         navigate("/admin/brands");
       } else {

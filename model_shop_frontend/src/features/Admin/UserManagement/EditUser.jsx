@@ -40,7 +40,7 @@ const EditUser = () => {
     };
     const checkAuth = async () => {
       try {
-        const response = await api.get("/user.php");
+        const response = await api.get("/user");
         if (!response.data.success || response.data.user.role !== "admin") {
           setError("Unauthorized: Admin access required");
           navigate("/admin/users");
@@ -78,13 +78,9 @@ const EditUser = () => {
 
     try {
       const data = new FormData();
-      data.append("email", formData.email || "");
-      data.append("full_name", formData.full_name || "");
-      data.append("phone_number", formData.phone_number || "");
-      data.append("address", formData.address || "");
-      data.append("role", formData.role || "user");
-      data.append("gender", formData.gender || "");
-      data.append("is_active", formData.is_active ? "1" : "0");
+      Object.keys(formData).forEach((key) => {
+        data.append(key, formData[key] || "");
+      });
 
       const response = await updateUserById(id, data);
       if (response.data.success) {
@@ -94,7 +90,7 @@ const EditUser = () => {
       }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update user");
-      console.error("Update user error:", err);
+      console.error(err);
     }
   };
 
@@ -104,14 +100,15 @@ const EditUser = () => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="max-w-4xl overflow-y-auto" style={{ maxHeight: "70vh" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 mb-2">Email *</label>
+              <label className="block text-gray-700 mb-2">Email</label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
+                required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -133,11 +130,8 @@ const EditUser = () => {
                 value={formData.phone_number}
                 onChange={handleChange}
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Phone number (10-15 digits)"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Gender</label>
               <select
@@ -146,7 +140,7 @@ const EditUser = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Select Gender</option>
+                <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>

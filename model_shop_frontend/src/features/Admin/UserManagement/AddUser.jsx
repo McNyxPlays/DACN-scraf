@@ -74,9 +74,9 @@ const AddUser = () => {
       {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="max-w-4xl overflow-y-auto" style={{ maxHeight: "70vh" }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 mb-2">Email *</label>
+              <label className="block text-gray-700 mb-2">Email</label>
               <input
                 type="email"
                 name="email"
@@ -84,11 +84,11 @@ const AddUser = () => {
                 onChange={handleChange}
                 required
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Enter user email"
+                placeholder="Enter email"
               />
             </div>
             <div>
-              <label className="block text-gray-700 mb-2">Password *</label>
+              <label className="block text-gray-700 mb-2">Password</label>
               <input
                 type="password"
                 name="password"
@@ -107,20 +107,18 @@ const AddUser = () => {
                 value={formData.full_name}
                 onChange={handleChange}
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Full name"
+                placeholder="Enter full name"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-gray-700 mb-2">Phone Number</label>
               <input
-                type="text"
+                type="tel"
                 name="phone_number"
                 value={formData.phone_number}
                 onChange={handleChange}
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Phone number (10-15 digits)"
+                placeholder="Enter phone number"
               />
             </div>
             <div>
@@ -131,7 +129,7 @@ const AddUser = () => {
                 onChange={handleChange}
                 className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Select Gender</option>
+                <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>

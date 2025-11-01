@@ -24,7 +24,7 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
 
     const fetchUserData = useCallback(async () => {
         try {
-            const response = await api.get("/user.php");
+            const response = await api.get("/user");
             if (response.data.status === "success") {
                 const fetchedUser = response.data.user;
                 console.log("Fetched user data:", fetchedUser); // Debug fetched data
@@ -70,11 +70,10 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
     }, [fetchUserData, isFetched]);
 
     useEffect(() => {
-        if (initialUser && !isFetched) {
-            console.log("Initial user prop:", initialUser); // Debug initialUser
+        if (initialUser) {
             setFormData((prev) => ({
                 ...prev,
-                full_name: initialUser.full_name || "Default Name",
+                full_name: initialUser.full_name || "",
                 email: initialUser.email || "",
                 phone_number: initialUser.phone_number || "",
                 address: initialUser.address || "",
@@ -83,259 +82,134 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                     initialUser.gender && !["male", "female"].includes(initialUser.gender)
                         ? initialUser.gender
                         : "",
-                currentPassword: "",
-                newPassword: "",
-                confirmPassword: "",
-                profile_image: null,
             }));
             setProfilePicture(
                 initialUser.profile_image
                     ? `http://localhost:8080/${initialUser.profile_image}`
                     : ""
             );
-            setIsFetched(true);
         }
-    }, [initialUser, isFetched]);
+    }, [initialUser]);
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        console.log(`Input changed - ${name}: ${value}`);
-        setFormData((prev) => ({ ...prev, [name]: value }));
-        setErrors((prev) => ({ ...prev, [name]: "", general: "" }));
-    };
-
-    const handleProfilePictureChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            if (!["image/jpeg", "image/png", "image/gif"].includes(file.type)) {
-                setErrors({ profile_image: "Only JPEG, PNG, or GIF images are allowed." });
-                Toastify.error("Only JPEG, PNG, or GIF images are allowed.");
-                return;
-            }
-            if (file.size > 5 * 1024 * 1024) {
-                setErrors({ profile_image: "Image size exceeds 5MB limit." });
-                Toastify.error("Image size exceeds 5MB limit.");
-                return;
-            }
-            setFormData((prev) => ({ ...prev, profile_image: file }));
-            setErrors((prev) => ({ ...prev, profile_image: "" }));
-            const reader = new FileReader();
-            reader.onloadend = () => setProfilePicture(reader.result);
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const validateForm = () => {
+    const validateForm = (updatedFormData) => {
         const newErrors = {};
-        if (!formData.full_name.trim()) {
-            newErrors.full_name = "Display Name is required.";
+        if (updatedFormData.full_name.length < 2) {
+            newErrors.full_name = "Full name must be at least 2 characters.";
         }
-        if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-            newErrors.email = "Valid email is required.";
+        if (!/^\S+@\S+\.\S+$/.test(updatedFormData.email)) {
+            newErrors.email = "Invalid email format.";
         }
-        if (formData.phone_number) {
-            const phoneRegex = /^\+?[\d\s()-]{10,15}$/;
-            if (!phoneRegex.test(formData.phone_number)) {
-                newErrors.phone_number =
-                    "Invalid phone number format (10-15 digits, may include spaces, dashes, or parentheses).";
-            }
+        if (updatedFormData.phone_number && !/^\d{10,15}$/.test(updatedFormData.phone_number)) {
+            newErrors.phone_number = "Invalid phone number.";
         }
-        if (formData.gender === "other" && !formData.custom_gender.trim()) {
+        if (updatedFormData.gender === "other" && !updatedFormData.custom_gender) {
             newErrors.custom_gender = "Please specify your gender.";
         }
-        if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
-            newErrors.confirmPassword = "New password and confirm password do not match.";
+        if (updatedFormData.currentPassword && updatedFormData.newPassword !== updatedFormData.confirmPassword) {
+            newErrors.confirmPassword = "Passwords do not match.";
         }
-        return newErrors;
+        if (updatedFormData.newPassword && updatedFormData.newPassword.length < 8) {
+            newErrors.newPassword = "New password must be at least 8 characters.";
+        }
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = async (e) => {
+    const handleInputChange = (e) => {
+        const { name, value, files } = e.target;
+        const updatedFormData = {
+            ...formData,
+            [name]: files ? files[0] : value,
+        };
+        setFormData(updatedFormData);
+        validateForm(updatedFormData);
+    };
+
+    const handleProfileUpdate = async (e) => {
         e.preventDefault();
+        if (!validateForm(formData)) return;
+
+        setIsLoading(true);
         setErrors({});
         setSuccess("");
-        setIsLoading(true);
-
-        console.log("Form data before submission:", formData);
-
-        const validationErrors = validateForm();
-        if (Object.keys(validationErrors).length > 0) {
-            console.log("Validation errors:", validationErrors);
-            setErrors(validationErrors);
-            setIsLoading(false);
-            return;
-        }
-
-        const formDataToSend = new FormData();
-        formDataToSend.append("full_name", formData.full_name.trim() || "Jane Doe");
-        formDataToSend.append("email", formData.email);
-        const sanitizedPhoneNumber = formData.phone_number
-            ? formData.phone_number.replace(/[^0-9+]/g, "").replace(/^(\+\d{1,3})(\d+)/, "$1$2")
-            : "";
-        formDataToSend.append("phone_number", sanitizedPhoneNumber);
-        formDataToSend.append("address", formData.address || "");
-        formDataToSend.append(
-            "gender",
-            formData.gender === "other" ? formData.custom_gender : formData.gender || ""
-        );
-        if (formData.profile_image) {
-            formDataToSend.append("profile_image", formData.profile_image);
-        } else if (!initialUser?.profile_image && !profilePicture) {
-            formDataToSend.append("remove_profile_image", "true");
-        }
-        if (formData.currentPassword) {
-            formDataToSend.append("current_password", formData.currentPassword);
-        }
-        if (formData.newPassword) {
-            formDataToSend.append("new_password", formData.newPassword);
-        }
-
-        for (let [key, value] of formDataToSend.entries()) {
-            console.log(`FormData entry - ${key}: ${value}`);
-        }
 
         try {
-            const response = await api.put("/user.php", formDataToSend, {
+            const data = new FormData();
+            Object.entries(formData).forEach(([key, value]) => {
+                if (value !== null && value !== "") {
+                    data.append(key, value);
+                }
+            });
+
+            if (formData.gender === "other" && formData.custom_gender) {
+                data.append("gender", formData.custom_gender);
+            }
+
+            const response = await api.put("/user", data, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
+
             if (response.data.status === "success") {
-                setSuccess("Profile settings saved successfully!");
-                const updatedUser = response.data.user;
-                setFormData((prev) => ({
-                    ...prev,
-                    full_name: updatedUser.full_name || "",
-                    email: updatedUser.email || "",
-                    phone_number: updatedUser.phone_number || "",
-                    address: updatedUser.address || "",
-                    gender: updatedUser.gender || "",
-                    custom_gender:
-                        updatedUser.gender && !["male", "female"].includes(updatedUser.gender)
-                            ? updatedUser.gender
-                            : "",
-                    profile_image: updatedUser.profile_image ? null : prev.profile_image,
-                    currentPassword: "",
-                    newPassword: "",
-                    confirmPassword: "",
-                }));
-                setProfilePicture(
-                    updatedUser.profile_image
-                        ? `http://localhost:8080/${updatedUser.profile_image}`
-                        : ""
-                );
-                if (onUserUpdate) onUserUpdate(updatedUser);
+                setSuccess("Profile updated successfully!");
                 Toastify.success("Profile updated successfully!");
+                const updatedUser = response.data.user;
+                sessionStorage.setItem("user", JSON.stringify(updatedUser));
+                if (onUserUpdate) onUserUpdate(updatedUser);
+                fetchUserData();
             } else {
-                setErrors({ general: response.data.message || "Failed to save changes." });
-                Toastify.error(response.data.message || "Failed to save changes.");
+                setErrors({ general: response.data.message || "Failed to update profile." });
+                Toastify.error(response.data.message || "Failed to update profile.");
             }
         } catch (err) {
-            console.error("Error updating profile:", err);
-            const errorMessage =
-                err.response?.data?.message || err.message || "Error updating profile.";
-            setErrors({
-                general:
-                    errorMessage === "Failed to upload image: Unable to move file to destination"
-                        ? "Failed to upload profile image. The server may have permission issues with the upload directory. Please try again or contact support."
-                        : errorMessage === "Failed to create upload directory"
-                        ? "Failed to upload profile image. The server could not create the upload directory. Please contact support."
-                        : errorMessage === "Upload directory is not writable"
-                        ? "Failed to upload profile image. The server upload directory is not writable. Please contact support."
-                        : errorMessage === "Email already exists"
-                        ? "This email is already in use. Please use a different email."
-                        : errorMessage === "Current password is incorrect"
-                        ? "The current password you entered is incorrect."
-                        : errorMessage === "Display name is required"
-                        ? "Please enter a display name."
-                        : "An error occurred while saving changes. Please try again.",
-            });
-            Toastify.error(errors.general);
+            console.error("Profile update error:", err);
+            const errorMessage = err.response?.data?.message || "Error updating profile.";
+            setErrors({ general: errorMessage });
+            Toastify.error(errorMessage);
         } finally {
             setIsLoading(false);
         }
     };
 
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            const dropdown = document.getElementById("profileDropdownMenu");
-            const trigger = document.getElementById("profileDropdownTrigger");
-            if (dropdown && trigger && !dropdown.contains(event.target) && !trigger.contains(event.target)) {
-                setIsProfileDropdownOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
     return (
         <>
             {activeSection === "profile" && (
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <h2 className="text-xl font-bold text-gray-800 mb-6">Profile Information</h2>
-                    {errors.general && <p className="text-red-500 mb-4">{errors.general}</p>}
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h2 className="text-xl font-bold mb-6">Profile Settings</h2>
                     {success && <p className="text-green-500 mb-4">{success}</p>}
-                    <form onSubmit={handleSubmit}>
-                        <div className="mb-6 flex flex-col md:flex-row items-start">
-                            <div className="mb-4 md:mb-0 md:mr-8">
-                                <div className="relative">
-                                    {profilePicture ? (
-                                        <img
-                                            src={profilePicture}
-                                            alt="Profile"
-                                            className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm"
-                                        />
-                                    ) : (
-                                        <div className="w-24 h-24 rounded-full border-4 border-white shadow-sm flex items-center justify-center bg-gray-200">
-                                            <i className="ri-user-line ri-3x text-gray-500"></i>
-                                        </div>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={() => document.querySelector('input[type="file"]').click()}
-                                        className="absolute bottom-0 right-0 bg-blue-600 text-white rounded-full p-2 shadow-md hover:bg-blue-700 cursor-pointer"
-                                        disabled={isLoading}
-                                    >
-                                        <i className="fas fa-camera"></i>
-                                    </button>
-                                </div>
+                    {errors.general && <p className="text-red-500 mb-4">{errors.general}</p>}
+                    <form onSubmit={handleProfileUpdate} className="space-y-6">
+                        <div className="flex items-center mb-6">
+                            <div className="relative">
+                                <img
+                                    src={profilePicture || "default-profile.jpg"}
+                                    alt="Profile"
+                                    className="w-24 h-24 rounded-full object-cover mr-4"
+                                />
+                                <input
+                                    type="file"
+                                    id="profile_image"
+                                    name="profile_image"
+                                    accept="image/*"
+                                    onChange={handleInputChange}
+                                    className="hidden"
+                                    disabled={isLoading}
+                                />
+                                <label
+                                    htmlFor="profile_image"
+                                    className="absolute bottom-0 right-4 bg-blue-600 text-white p-1 rounded-full cursor-pointer"
+                                >
+                                    <i className="ri-camera-line"></i>
+                                </label>
                             </div>
-                            <div className="flex-1 w-full">
-                                <p className="text-gray-600 mb-4">
-                                    Upload a new profile picture. This will be displayed on your
-                                    profile and in community posts.
-                                </p>
-                                <div className="flex space-x-3">
-                                    <label className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 cursor-pointer">
-                                        Upload New Picture
-                                        <input
-                                            type="file"
-                                            accept="image/jpeg,image/png,image/gif"
-                                            onChange={handleProfilePictureChange}
-                                            className="hidden"
-                                            disabled={isLoading}
-                                            name="profile_image"
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer"
-                                        onClick={() => {
-                                            setProfilePicture("");
-                                            setFormData((prev) => ({ ...prev, profile_image: null }));
-                                        }}
-                                        disabled={isLoading}
-                                    >
-                                        Remove
-                                    </button>
-                                </div>
-                                {errors.profile_image && (
-                                    <p className="text-red-500 text-sm mt-1">{errors.profile_image}</p>
-                                )}
+                            <div>
+                                <h3 className="text-lg font-semibold">{formData.full_name}</h3>
+                                <p className="text-sm text-gray-500">{formData.email}</p>
                             </div>
                         </div>
-
-                        <div className="border-t border-gray-200 pt-6 mt-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="mb-4">
                                 <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Display Name
+                                    Full Name
                                 </label>
                                 <input
                                     type="text"
@@ -343,8 +217,7 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     name="full_name"
                                     value={formData.full_name}
                                     onChange={handleInputChange}
-                                    placeholder="Enter your display name"
-                                    required
+                                    placeholder="Enter your full name"
                                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     disabled={isLoading}
                                 />
@@ -354,7 +227,7 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                             </div>
                             <div className="mb-4">
                                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Email Address
+                                    Email
                                 </label>
                                 <input
                                     type="email"
@@ -363,11 +236,12 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     value={formData.email}
                                     onChange={handleInputChange}
                                     placeholder="Enter your email"
-                                    required
                                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     disabled={isLoading}
                                 />
-                                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                                {errors.email && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                                )}
                             </div>
                             <div className="mb-4">
                                 <label htmlFor="phone_number" className="block text-sm font-medium text-gray-700 mb-1">
@@ -379,7 +253,7 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     name="phone_number"
                                     value={formData.phone_number}
                                     onChange={handleInputChange}
-                                    placeholder="Enter your phone number (e.g., +1234567890)"
+                                    placeholder="Enter your phone number"
                                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     disabled={isLoading}
                                 />
@@ -391,7 +265,8 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                 <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
                                     Address
                                 </label>
-                                <textarea
+                                <input
+                                    type="text"
                                     id="address"
                                     name="address"
                                     value={formData.address}
@@ -399,14 +274,11 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     placeholder="Enter your address"
                                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     disabled={isLoading}
-                                ></textarea>
+                                />
                             </div>
                             <div className="mb-4">
-                                <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
-                                    Gender
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                                 <select
-                                    id="gender"
                                     name="gender"
                                     value={formData.gender}
                                     onChange={handleInputChange}
@@ -418,26 +290,31 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     <option value="female">Female</option>
                                     <option value="other">Other</option>
                                 </select>
-                                {formData.gender === "other" && (
+                            </div>
+                            {formData.gender === "other" && (
+                                <div className="mb-4">
+                                    <label htmlFor="custom_gender" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Custom Gender
+                                    </label>
                                     <input
                                         type="text"
+                                        id="custom_gender"
                                         name="custom_gender"
                                         value={formData.custom_gender}
                                         onChange={handleInputChange}
-                                        placeholder="Specify gender"
-                                        className="w-full mt-2 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Specify your gender"
+                                        className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         disabled={isLoading}
                                     />
-                                )}
-                                {errors.custom_gender && (
-                                    <p className="text-red-500 text-sm mt-1">{errors.custom_gender}</p>
-                                )}
-                            </div>
+                                    {errors.custom_gender && (
+                                        <p className="text-red-500 text-sm mt-1">{errors.custom_gender}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
-
-                        <div className="border-t border-gray-200 pt-6 mt-6">
-                            <h3 className="text-lg font-medium text-gray-800 mb-4">Change Password</h3>
-                            <div className="mb-4">
+                        <h2 className="text-xl font-bold mb-4">Change Password</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="mb-6">
                                 <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
                                     Current Password
                                 </label>
@@ -452,7 +329,7 @@ const ProfileSettings = ({ activeSection, user: initialUser, onUserUpdate }) => 
                                     disabled={isLoading}
                                 />
                             </div>
-                            <div className="mb-4">
+                            <div className="mb-6">
                                 <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
                                     New Password
                                 </label>

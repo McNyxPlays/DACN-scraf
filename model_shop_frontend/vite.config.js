@@ -7,13 +7,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8080/model_shop_backend/api",
+        target: "http://localhost:3000",
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
       "/Uploads": {
-        target: "http://localhost:8080/model_shop_backend",
+        target: "http://localhost:3000",
         changeOrigin: true,
         secure: false,
       },
