@@ -1,3 +1,4 @@
+// src/models/userModel.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 

@@ -5646,3 +5646,160 @@
 [2025-11-01T15:51:55.234Z] Unauthorized: Please log in
 [2025-11-01T15:53:01.310Z] Unauthorized: Please log in
 [2025-11-01T15:53:01.316Z] Unauthorized: Please log in
+[2025-11-16T08:35:16.500Z] Unauthorized: Please log in
+[2025-11-16T08:35:16.603Z] Unauthorized: Please log in
+[2025-11-16T08:37:22.549Z] Unauthorized: Please log in
+[2025-11-16T08:37:47.148Z] Unauthorized: Please log in
+[2025-11-16T08:37:47.156Z] Unauthorized: Please log in
+[2025-11-16T08:44:42.662Z] Unauthorized: Please log in
+[2025-11-16T08:44:42.701Z] Unauthorized: Please log in
+[2025-11-16T09:02:07.385Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:02:07.408Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:02:22.445Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:02:22.452Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:03.977Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:03.984Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:35.346Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:35.354Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:52.218Z] Unauthorized: Please log in
+[2025-11-16T09:03:52.231Z] Unauthorized: Please log in
+[2025-11-16T09:03:56.318Z] Unauthorized: Please log in
+[2025-11-16T09:03:56.353Z] Unauthorized: Please log in
+[2025-11-16T09:03:57.526Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:03:57.534Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:04:14.084Z] Unauthorized: Please log in
+[2025-11-16T09:04:14.098Z] Unauthorized: Please log in
+[2025-11-16T09:04:17.711Z] Unauthorized: Please log in
+[2025-11-16T09:04:17.794Z] Unauthorized: Please log in
+[2025-11-16T09:04:20.033Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:04:20.041Z] Failed to fetch product: Unknown column 'NaN' in 'where clause'
+Query: 
+    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
+           c.name as category_name, b.name as brand_name, p.created_at
+    FROM products p
+    LEFT JOIN categories c ON p.category_id = c.category_id
+    LEFT JOIN brands b ON p.brand_id = b.brand_id
+    WHERE p.product_id = ?
+  
+Params: [null]
+[2025-11-16T09:04:32.731Z] Unauthorized: Please log in
+[2025-11-16T09:04:32.751Z] Unauthorized: Please log in
+[2025-11-16T09:04:45.702Z] Unauthorized: Please log in
+[2025-11-16T09:04:45.708Z] Unauthorized: Please log in
+[2025-11-16T09:11:42.811Z] Unauthorized: Please log in
+[2025-11-16T09:11:42.820Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.842Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.877Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.896Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.907Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.912Z] Unauthorized: Please log in
+[2025-11-16T09:24:06.918Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.326Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.374Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.395Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.413Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.448Z] Unauthorized: Please log in
+[2025-11-16T09:34:20.486Z] Unauthorized: Please log in
+[2025-11-16T10:11:10.425Z] Unauthorized: Please log in
+[2025-11-16T10:11:10.467Z] Unauthorized: Please log in
+[2025-11-16T10:11:10.495Z] Unauthorized: Please log in
+[2025-11-16T10:11:10.531Z] Unauthorized: Please log in

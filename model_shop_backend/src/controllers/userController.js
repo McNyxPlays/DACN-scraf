@@ -1,3 +1,4 @@
+// src/controllers/userController.js
 const db = require('../config/db');
 const { sanitizeInput, logError } = require('../config/functions');
 const fs = require('fs').promises;

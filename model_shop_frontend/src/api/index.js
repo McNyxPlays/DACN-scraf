@@ -10,6 +10,31 @@ const api = axios.create({
   },
 });
 
+let isValidating = false;
+api.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Nếu đang trong quá trình validate → bỏ qua
+      if (isValidating) {
+        console.warn('401 handled silently for validation (skip re‑validate)');
+        return Promise.reject(error);
+      }
+
+      // Bắt đầu validate
+      isValidating = true;
+      try {
+        await store.dispatch(validateUser()).unwrap();
+      } catch (e) {
+        // Validate thất bại → logout ngay
+        await store.dispatch(logoutUser()).unwrap();
+      } finally {
+        isValidating = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 // === Optional: Interceptors để tự động cập nhật CSRF token ===
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('csrf_token') || 

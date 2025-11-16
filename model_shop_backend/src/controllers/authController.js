@@ -1,4 +1,3 @@
-// controllers/authController.js
 const db = require('../config/db');
 const { sanitizeInput, logError } = require('../config/functions');
 const bcrypt = require('bcrypt');
@@ -75,7 +74,7 @@ const login = async (req, res) => {
     if (await bcrypt.compare(password, user.password)) {
       req.session.user_id = user.user_id;
       req.session.loginAttempts = 0;
-      console.log(`Success: Session user_id set to ${user.user_id}`); // Debug log
+      console.log(`Success: Session user_id set to ${user.user_id}`); // Debug log (giữ để check session)
 
       // Handle remember_me with extended maxAge
       if (remember_me) {
@@ -83,6 +82,9 @@ const login = async (req, res) => {
       } else {
         req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 1 day default
       }
+
+      // Thêm debug: Check session sau khi set
+      console.log('Session after login:', req.session); // Debug để confirm session persist
 
       res.status(200).json({
         message: 'Login successful',

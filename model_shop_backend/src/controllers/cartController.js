@@ -1,3 +1,4 @@
+// src/controllers/cartController.js
 const db = require('../config/db');
 const { sanitizeInput, logError } = require('../config/functions');
 
@@ -8,8 +9,9 @@ const addGuestCart = async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing or invalid parameters' });
   }
 
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     const [productRows] = await pool.query('SELECT stock_quantity FROM products WHERE product_id = ?', [product_id]);
     const product = productRows[0];
 
@@ -46,28 +48,35 @@ const addGuestCart = async (req, res) => {
   } catch (error) {
     await logError('Database error in guest_carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
 const getGuestCart = async (req, res) => {
-  const session_key = req.query.session_key || req.body.session_key;
+  const { session_key } = req.query;
 
   if (!session_key) {
     return res.status(400).json({ status: 'error', message: 'Missing session_key' });
   }
 
+  let pool;
   try {
-    const pool = await db.getConnection();
-    const [rows] = await pool.query(`
-      SELECT gc.guest_cart_id, gc.quantity, p.product_id, p.name, p.price, p.description
-      FROM guest_carts gc
-      JOIN products p ON gc.product_id = p.product_id
-      WHERE gc.session_key = ?
-    `, [session_key]);
-    res.json({ status: 'success', items: rows });
+    pool = await db.getConnection();
+    const [rows] = await pool.query(
+      'SELECT gc.*, p.name, p.price, p.discount, pi.image_url ' +
+      'FROM guest_carts gc ' +
+      'JOIN products p ON gc.product_id = p.product_id ' +
+      'LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = TRUE ' +
+      'WHERE gc.session_key = ?',
+      [session_key]
+    );
+    res.json({ status: 'success', data: rows });
   } catch (error) {
     await logError('Database error in guest_carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
@@ -78,8 +87,9 @@ const updateGuestCart = async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing or invalid parameters' });
   }
 
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     const [cartRows] = await pool.query(
       'SELECT product_id FROM guest_carts WHERE guest_cart_id = ? AND session_key = ?',
       [guest_cart_id, session_key]
@@ -105,14 +115,21 @@ const updateGuestCart = async (req, res) => {
   } catch (error) {
     await logError('Database error in guest_carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
 const deleteGuestCart = async (req, res) => {
   const { guest_cart_id, session_key } = req.body;
 
+  if (!session_key) {
+    return res.status(400).json({ status: 'error', message: 'Missing session_key' });
+  }
+
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     if (guest_cart_id) {
       const [result] = await pool.query(
         'DELETE FROM guest_carts WHERE guest_cart_id = ? AND session_key = ?',
@@ -123,15 +140,15 @@ const deleteGuestCart = async (req, res) => {
       } else {
         res.status(400).json({ status: 'error', message: 'Invalid guest_cart_id or session_key' });
       }
-    } else if (session_key) {
+    } else {
       const [result] = await pool.query('DELETE FROM guest_carts WHERE session_key = ?', [session_key]);
       res.json({ status: 'success', message: result.affectedRows > 0 ? 'All items removed from guest cart' : 'Guest cart is already empty' });
-    } else {
-      res.status(400).json({ status: 'error', message: 'Missing guest_cart_id or session_key' });
     }
   } catch (error) {
     await logError('Database error in guest_carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
@@ -147,8 +164,9 @@ const addCart = async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing or invalid parameters' });
   }
 
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     const [productRows] = await pool.query('SELECT stock_quantity FROM products WHERE product_id = ?', [product_id]);
     const product = productRows[0];
 
@@ -185,6 +203,8 @@ const addCart = async (req, res) => {
   } catch (error) {
     await logError('Database error in carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
@@ -195,18 +215,23 @@ const getCart = async (req, res) => {
 
   const user_id = req.session.user_id;
 
+  let pool;
   try {
-    const pool = await db.getConnection();
-    const [rows] = await pool.query(`
-      SELECT c.cart_id, c.quantity, p.product_id, p.name, p.price, p.description
-      FROM carts c
-      JOIN products p ON c.product_id = p.product_id
-      WHERE c.user_id = ?
-    `, [user_id]);
-    res.json({ status: 'success', items: rows });
+    pool = await db.getConnection();
+    const [rows] = await pool.query(
+      'SELECT c.*, p.name, p.price, p.discount, pi.image_url ' +
+      'FROM carts c ' +
+      'JOIN products p ON c.product_id = p.product_id ' +
+      'LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = TRUE ' +
+      'WHERE c.user_id = ?',
+      [user_id]
+    );
+    res.json({ status: 'success', items: rows }); // FIX: Trả 'items' để match frontend (setCartItems(response.data.items))
   } catch (error) {
     await logError('Database error in carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
@@ -222,8 +247,9 @@ const updateCart = async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Missing or invalid parameters' });
   }
 
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     const [cartRows] = await pool.query(
       'SELECT product_id FROM carts WHERE cart_id = ? AND user_id = ?',
       [cart_id, user_id]
@@ -249,6 +275,8 @@ const updateCart = async (req, res) => {
   } catch (error) {
     await logError('Database error in carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 
@@ -260,8 +288,9 @@ const deleteCart = async (req, res) => {
   const user_id = req.session.user_id;
   const { cart_id } = req.body;
 
+  let pool;
   try {
-    const pool = await db.getConnection();
+    pool = await db.getConnection();
     if (cart_id) {
       const [result] = await pool.query(
         'DELETE FROM carts WHERE cart_id = ? AND user_id = ?',
@@ -279,6 +308,8 @@ const deleteCart = async (req, res) => {
   } catch (error) {
     await logError('Database error in carts: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release(); // FIX: Release connection
   }
 };
 

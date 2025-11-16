@@ -1,8 +1,10 @@
 // src/features/Cart/Cart.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { validateUser } from "../../redux/userSlice";
 import api from "../../api/index";
-import { Toastify } from "../../components/Toastify"; // ← Added import for Toastify
+import { Toastify } from "../../components/Toastify";
 import CartItem from "./CartItem";
 
 function Cart({ isOpen, setIsOpen }) {
@@ -10,7 +12,8 @@ function Cart({ isOpen, setIsOpen }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const exchangeRate = 25000;
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = useSelector((state) => state.user.user);
+  const dispatch = useDispatch();
   const sessionKey =
     localStorage.getItem("guest_session_key") ||
     (() => {
@@ -30,8 +33,8 @@ function Cart({ isOpen, setIsOpen }) {
       localCart.map(async (item) => {
         try {
           const response = await api.get("/products/product", { params: { id: item.product_id } });
-          if (response.data.status === "success" && response.data.data) {  // Kiểm tra thêm để tránh item null
-            return { ...response.data.data, quantity: item.quantity, guest_cart_id: item.product_id }; // Giả guest_cart_id = product_id for key
+          if (response.data.status === "success" && response.data.data) {
+            return { ...response.data.data, quantity: item.quantity, guest_cart_id: item.product_id };
           }
           return null;
         } catch (err) {
@@ -49,153 +52,97 @@ function Cart({ isOpen, setIsOpen }) {
     setLoading(true);
     setError("");
     try {
-      if (user?.user_id) {  // Kiểm tra user có user_id để chắc chắn là user hợp lệ
-        // User: Gọi API
+      if (user?.user_id) {
         const response = await api.get("/carts");
         if (response.data.status === "success") {
-          setCartItems(response.data.items || []);
+          setCartItems(response.data.items || []); // Giả sử backend trả 'items'
         } else {
           setError(response.data.message || "Failed to fetch cart.");
         }
       } else {
-        // Guest: Load từ local + fetch details
         const items = await fetchLocalGuestCart();
         setCartItems(items);
       }
     } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(validateUser());
+      }
       setError(err.response?.data?.message || "Network error.");
     } finally {
       setLoading(false);
     }
   };
 
-  // === MỞ CART → FETCH ===
+  // useEffect với deps để tránh loop
   useEffect(() => {
-    if (isOpen) fetchCartItems();
-
-    const handleUpdate = () => {
-      if (isOpen) setTimeout(fetchCartItems, 500);  // Delay nhẹ để tránh race condition sau login/merge
-    };
-    window.addEventListener("cartUpdated", handleUpdate);
-    return () => window.removeEventListener("cartUpdated", handleUpdate);
-  }, [isOpen, user]);  // Thêm dependency user để refresh khi user thay đổi (sau login)
-
-  // === CLICK NGOÀI ĐÓNG CART ===
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (cartRef.current && !cartRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
-    };
-    if (isOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  // Helper để update guest cart trong localStorage
-  const updateLocalGuestCart = (productId, newQty) => {
-    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
-    const existing = localCart.find(item => item.product_id === productId);
-    if (existing) {
-      existing.quantity = newQty;
+    if (isOpen) {
+      fetchCartItems();
     }
-    localStorage.setItem('guest_cart', JSON.stringify(localCart));
-  };
+  }, [isOpen, user, sessionKey]);
 
-  // Helper để remove from localStorage
-  const removeFromLocalGuestCart = (productId) => {
-    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
-    localCart = localCart.filter(item => item.product_id !== productId);
-    localStorage.setItem('guest_cart', JSON.stringify(localCart));
-  };
-
-  // Helper để clear local guest cart
-  const clearLocalGuestCart = () => {
-    localStorage.removeItem('guest_cart');
-  };
-
-  // === THAY ĐỔI SỐ LƯỢNG ===
+  // Handle quantity change
   const handleQuantityChange = async (itemId, newQuantity) => {
-    if (user) {
-      // User: Gọi API update
-      try {
-        const endpoint = "/carts";
-        const data = { cart_id: itemId, quantity: newQuantity };
-
-        const response = await api.put(endpoint, data);
-        if (response.data.status === "success") {
-          setCartItems(prev =>
-            prev.map(i => (i.cart_id === itemId ? { ...i, quantity: newQuantity } : i))
-          );
-          Toastify.success("Quantity updated.");
-          window.dispatchEvent(new CustomEvent("cartUpdated"));
-        }
-      } catch (err) {
-        Toastify.error("Failed to update quantity.");
+    if (newQuantity < 1) return;
+    try {
+      if (user) {
+        await api.put("/carts", { cart_id: itemId, quantity: newQuantity });
+        fetchCartItems(); // FIX: Refetch sau update cho user để update UI
+      } else {
+        let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+        const item = localCart.find(i => i.product_id === itemId);
+        if (item) item.quantity = newQuantity;
+        localStorage.setItem('guest_cart', JSON.stringify(localCart));
+        fetchCartItems(); // Đã có cho guest
       }
-    } else {
-      // Guest: Update local
-      updateLocalGuestCart(itemId, newQuantity);
-      setCartItems(prev =>
-        prev.map(i => (i.product_id === itemId ? { ...i, quantity: newQuantity } : i))
-      );
-      Toastify.success("Quantity updated.");
       window.dispatchEvent(new CustomEvent("cartUpdated"));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(validateUser());
+      }
+      Toastify.error("Failed to update quantity.");
     }
   };
 
-  // === XÓA ITEM ===
+  // Handle remove item
   const handleRemoveItem = async (itemId) => {
-    if (user) {
-      // User: Gọi API delete
-      try {
-        const endpoint = "/carts";
-        const data = { cart_id: itemId };
-
-        const response = await api.delete(endpoint, { data });
-        if (response.data.status === "success") {
-          setCartItems(prev => prev.filter(i => i.cart_id !== itemId));
-          Toastify.success("Item removed.");
-          window.dispatchEvent(new CustomEvent("cartUpdated"));
-        }
-      } catch (err) {
-        Toastify.error("Failed to remove item.");
+    try {
+      if (user) {
+        await api.delete("/carts", { data: { cart_id: itemId } });
+        fetchCartItems(); // FIX: Refetch sau remove cho user để update UI
+      } else {
+        let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
+        localCart = localCart.filter(i => i.product_id !== itemId);
+        localStorage.setItem('guest_cart', JSON.stringify(localCart));
+        fetchCartItems(); // Đã có cho guest
       }
-    } else {
-      // Guest: Remove local
-      removeFromLocalGuestCart(itemId);
-      setCartItems(prev => prev.filter(i => i.product_id !== itemId));
-      Toastify.success("Item removed.");
       window.dispatchEvent(new CustomEvent("cartUpdated"));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(validateUser());
+      }
+      Toastify.error("Failed to remove item.");
     }
   };
 
-  // === XÓA TẤT CẢ ===
+  // Handle remove all
   const handleRemoveAll = async () => {
-    if (user) {
-      // User: Gọi API
-      try {
-        const endpoint = "/carts";
-        const data = {};
-
-        const response = await api.delete(endpoint, { data });
-        if (response.data.status === "success") {
-          setCartItems([]);
-          Toastify.success("All items removed.");
-          window.dispatchEvent(new CustomEvent("cartUpdated"));
-        }
-      } catch (err) {
-        Toastify.error("Failed to clear cart.");
+    try {
+      if (user) {
+        await api.delete("/carts");
+        fetchCartItems(); // FIX: Refetch sau remove all cho user để update UI (sẽ set empty)
+      } else {
+        localStorage.removeItem('guest_cart');
+        setCartItems([]);
       }
-    } else {
-      // Guest: Clear local
-      clearLocalGuestCart();
-      setCartItems([]);
-      Toastify.success("All items removed.");
       window.dispatchEvent(new CustomEvent("cartUpdated"));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(validateUser());
+      }
+      Toastify.error("Failed to clear cart.");
     }
   };
 
-  // === CHECKOUT & CONTINUE ===
   const handleCheckout = () => {
     setIsOpen(false);
     navigate("/checkout");
@@ -206,15 +153,28 @@ function Cart({ isOpen, setIsOpen }) {
     navigate("/shop");
   };
 
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + (item.price || 0) * exchangeRate * (item.quantity || 1),
-    0
-  );
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (cartRef.current && !cartRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
 
-  if (!isOpen) return null;
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity * exchangeRate, 0);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
+    <div
+      className={`fixed inset-0 z-50 flex justify-end transition-opacity duration-300 ${
+        isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
+      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+    >
       <div ref={cartRef} className="bg-white w-full max-w-md h-full overflow-y-auto p-6 shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold">Shopping Cart</h2>
@@ -234,7 +194,7 @@ function Cart({ isOpen, setIsOpen }) {
             <div className="space-y-2 mb-4">
               {cartItems.map((item) => (
                 <CartItem
-                  key={user ? item.cart_id : item.product_id} // For guest, key = product_id
+                  key={user ? item.cart_id : item.product_id}
                   item={item}
                   user={user}
                   exchangeRate={exchangeRate}

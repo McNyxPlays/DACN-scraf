@@ -1,3 +1,4 @@
+// src/controllers/favoriteController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 

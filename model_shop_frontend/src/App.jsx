@@ -1,4 +1,3 @@
-// App.jsx (Added handling for user loading to prevent premature cart fetches; improved merge error handling for cart saving.)
 // src/App.jsx
 import React, { useState, useEffect } from "react";
 import { Routes, Route, Outlet, Navigate } from "react-router-dom";

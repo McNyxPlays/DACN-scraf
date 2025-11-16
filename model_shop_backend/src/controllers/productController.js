@@ -1,3 +1,4 @@
+// src/controllers/productController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 const path = require('path');
