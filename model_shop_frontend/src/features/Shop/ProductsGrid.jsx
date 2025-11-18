@@ -162,29 +162,45 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
   };
 
   const handleAddToCart = async (productId) => {
-    if (user) {
-      try {
-        await api.post("/carts", { product_id: productId, quantity: 1 });
-        Toastify.success("Added to cart!");
-        window.dispatchEvent(new CustomEvent("cartUpdated"));
-      } catch (err) {
-        Toastify.error("Failed to add to cart.");
-      }
-    } else {
+    const product = products.find((p) => p.product_id === productId);
+    if (!product || product.stock_quantity <= 0) {
+      Toastify.error("Product out of stock.");
+      return;
+    }
+
+    if (!user) {
       addToLocalGuestCart(productId);
-      Toastify.success("Added to cart!");
+      Toastify.success("Added to cart successfully!");
       window.dispatchEvent(new CustomEvent("cartUpdated"));
+    } else {
+      const endpoint = "/carts";
+      const data = { product_id: productId, quantity: 1 };
+
+      try {
+        const response = await api.post(endpoint, data);
+        if (response.data.status === "success") {
+          Toastify.success("Added to cart successfully!");
+          window.dispatchEvent(new CustomEvent("cartUpdated"));
+        } else {
+          Toastify.error(response.data.message || "Failed to add to cart.");
+        }
+      } catch (err) {
+        if (err.response?.status === 401) {
+          dispatch(logoutUser());
+          Toastify.error("Session expired. Please login again.");
+        } else {
+          Toastify.error(err.response?.data?.message || "Network or server error.");
+        }
+      }
     }
   };
 
   return (
-    <div>
-      {/* The rest of the component remains unchanged, assuming no UI changes */}
-      {/* ... (omitted for brevity, but include the full JSX from the original) */}
+    <div className="flex-1">
       {loading ? (
-        <div className="text-center py-8">Loading products...</div>
+        <p className="text-center py-8 text-gray-500">Loading products...</p>
       ) : error ? (
-        <p className="text-red-500 text-center">{error}</p>
+        <p className="text-red-500 text-center py-8">{error}</p>
       ) : (
         <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-4" : "grid-cols-1"}`}>
           {products.map((product) => (
@@ -192,7 +208,7 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
               key={product.product_id}
               className={`group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow ${
                 viewMode === "list" ? "flex" : ""
-              }`}
+              } ${product.stock_quantity <= 0 ? "opacity-50" : ""}`}
             >
               <div className={`relative ${viewMode === "list" ? "w-48 h-48 flex-shrink-0" : "h-64"}`}>
                 <ImageWithFallback
@@ -238,13 +254,14 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
                       {(product.price * exchangeRate).toLocaleString("vi-VN")} VND
                     </span>
                   )}
-                  <button
-                    onClick={() => handleAddToCart(product.product_id)}
-                    className="w-10 h-10 flex items-center justify-center bg-gray-100 text-gray-700 rounded-full hover:bg-primary hover:text-white transition rounded-button"
-                    disabled={product.stock_quantity <= 0}
-                  >
-                    <i className="ri-shopping-cart-line"></i>
-                  </button>
+                  {product.stock_quantity > 0 && (
+                    <button
+                      onClick={() => handleAddToCart(product.product_id)}
+                      className="w-10 h-10 flex items-center justify-center bg-gray-100 text-gray-700 rounded-full hover:bg-primary hover:text-white transition rounded-button"
+                    >
+                      <i className="ri-shopping-cart-line"></i>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
