@@ -45,8 +45,12 @@ const getProduct = async (req, res) => {
     return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
   }
   const query = `
-    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
-           c.name as category_name, b.name as brand_name, p.created_at
+    SELECT 
+      p.*, 
+      c.name as category_name, 
+      b.name as brand_name,
+      (p.price * (1 - p.discount / 100)) AS discounted_price,
+      (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = TRUE LIMIT 1) AS main_image
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.category_id
     LEFT JOIN brands b ON p.brand_id = b.brand_id
@@ -73,23 +77,91 @@ const getProduct = async (req, res) => {
 };
 
 const getProducts = async (req, res) => {
-  const query = `
-    SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
-           c.name as category_name, b.name as brand_name, p.created_at
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.category_id
-    LEFT JOIN brands b ON p.brand_id = b.brand_id
-    WHERE p.name LIKE ?
-    LIMIT ?, ?
-  `;
   try {
     const pool = await db.getConnection();
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const offset = (page - 1) * limit;
-    const search = req.query.search ? `%${req.query.search}%` : '%';
-    const [rows] = await pool.query(query, [search, offset, limit]);
-    const [total] = await pool.query('SELECT COUNT(*) as total FROM products WHERE name LIKE ?', [search]);
+
+    const searchTerm = req.query.search?.trim();
+    const search = searchTerm ? `%${searchTerm}%` : null;
+
+    const categoryIds = req.query.category_ids && req.query.category_ids.trim() !== '' 
+      ? req.query.category_ids.split(',').map(Number).filter(id => id > 0) : [];
+
+    const brandIds = req.query.brand_ids && req.query.brand_ids.trim() !== '' 
+      ? req.query.brand_ids.split(',').map(Number).filter(id => id > 0) : [];
+
+    const statuses = [];
+    if (req.query.status_new === 'true') statuses.push('new');
+    if (req.query.status_sale === 'true') statuses.push('sale');
+
+    const sort = req.query.sort || 'popularity';
+
+    let orderBy = 'p.created_at DESC';
+    if (sort === 'price_low') orderBy = 'p.price ASC';
+    else if (sort === 'price_high') orderBy = 'p.price DESC';
+    else if (sort === 'newest') orderBy = 'p.created_at DESC';
+    // popularity & default = newest
+
+    let whereConditions = [];
+    let queryParams = [];
+
+    if (search) {
+      whereConditions.push('p.name LIKE ?');
+      queryParams.push(search);
+    }
+    if (categoryIds.length > 0) {
+      whereConditions.push(`p.category_id IN (${categoryIds.map(() => '?').join(',')})`);
+      queryParams.push(...categoryIds);
+    }
+    if (brandIds.length > 0) {
+      whereConditions.push(`p.brand_id IN (${brandIds.map(() => '?').join(',')})`);
+      queryParams.push(...brandIds);
+    }
+    if (statuses.length > 0) {
+      whereConditions.push(`p.status IN (${statuses.map(() => '?').join(',')})`);
+      queryParams.push(...statuses);
+    }
+    if (req.query.status_available === 'true') {
+      whereConditions.push('p.stock_quantity > 0');
+      // không cần push param vì không có ?
+    }
+
+    const whereClause = whereConditions.length > 0 ? 'WHERE ' + whereConditions.join(' AND ') : '';
+
+    const productsQuery = `
+      SELECT 
+        p.product_id,
+        p.name,
+        p.description,
+        p.price,
+        p.stock_quantity,
+        p.discount,
+        p.status,
+        (p.price * (1 - p.discount / 100)) AS discounted_price,
+        c.name as category_name,
+        b.name as brand_name,
+        p.created_at,
+        (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = TRUE LIMIT 1) AS main_image
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.category_id
+      LEFT JOIN brands b ON p.brand_id = b.brand_id
+      ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT ? OFFSET ?
+    `;
+
+    queryParams.push(limit, offset);
+
+    const [rows] = await pool.query(productsQuery, queryParams);
+
+    // Count query (same conditions, without LIMIT/OFFSET)
+    const countQuery = `SELECT COUNT(*) as total FROM products p ${whereClause}`;
+    const countParams = queryParams.slice(0, -2); // remove limit & offset
+    const [total] = await pool.query(countQuery, countParams);
+
     res.json({
       status: 'success',
       data: rows,
@@ -100,9 +172,9 @@ const getProducts = async (req, res) => {
       }
     });
   } catch (error) {
-    await logError('Failed to fetch products: ' + error.message, query, [search, offset, limit]);
+    await logError('Failed to fetch products: ' + error.message);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch products: ' + error.message });
+    res.status(500).json({ status: 'error', message: 'Failed to fetch products' });
   }
 };
 

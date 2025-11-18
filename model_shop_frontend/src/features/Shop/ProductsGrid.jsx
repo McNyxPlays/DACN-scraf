@@ -7,7 +7,7 @@ import QuickViewModal from "./QuickViewModal";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { Toastify } from "../../components/Toastify";
 
-function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
+function ProductsGrid({ viewMode, filters, setFilters }) {
   const dispatch = useDispatch();
   const [sortOption, setSortOption] = useState("Popularity");
   const [isSortOpen, setIsSortOpen] = useState(false);
@@ -23,7 +23,6 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
   const [quickViewProductId, setQuickViewProductId] = useState(null);
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const exchangeRate = 25000;
-  const sessionKey =
     localStorage.getItem("guest_session_key") ||
     (() => {
       const newSessionKey = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -55,7 +54,7 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
       }
     };
     validateUser();
-  }, [dispatch]);
+  }, [dispatch, user]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -75,13 +74,20 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
     fetchProducts();
   }, [filters, sortOption, currentPage]);
 
-  const fetchProducts = async () => {
+const fetchProducts = async () => {
     setLoading(true);
     try {
+      const statuses = [];
+      if (filters.status_new) statuses.push('new');
+      if (filters.status_sale) statuses.push('sale');
+
       const params = {
-        ...filters,
-        category_ids: filters.category_ids.join(","),
-        brand_ids: filters.brand_ids.join(","),
+        category_ids: filters.category_ids.length ? filters.category_ids.join(",") : undefined,
+        brand_ids: filters.brand_ids.length ? filters.brand_ids.join(",") : undefined,
+        status_new: filters.status_new ? "true" : undefined,
+        status_sale: filters.status_sale ? "true" : undefined,
+        status_available: filters.status_available ? "true" : undefined,
+        search: filters.search || undefined,
         sort:
           sortOption === "Price: Low to High"
             ? "price_low"
@@ -92,6 +98,7 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
             : "popularity",
         page: currentPage,
       };
+
       const response = await api.get("/products", { params });
       if (response.data.status === "success") {
         setProducts(response.data.data);
@@ -109,12 +116,6 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
       setProducts([]);
       setError(`Failed to fetch products: ${errorMsg}`);
       Toastify.error(`Failed to fetch products: ${errorMsg}`);
-      console.error("Fetch products error:", {
-        error: err,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
     } finally {
       setLoading(false);
     }
@@ -218,7 +219,7 @@ function ProductsGrid({ viewMode, filters, setFilters, categories, brands }) {
                 />
                 {product.discount > 0 && (
                   <span className="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                    -{product.discount}%
+                    -{Number(product.discount).toFixed(0)}%
                   </span>
                 )}
                 <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity"></div>

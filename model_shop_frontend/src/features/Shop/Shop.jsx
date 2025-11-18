@@ -101,8 +101,6 @@ function Shop() {
                 viewMode={viewMode}
                 filters={filters}
                 setFilters={setFilters}
-                categories={categories}
-                brands={brands}
               />
             </div>
           </div>

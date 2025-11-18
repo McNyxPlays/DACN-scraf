@@ -166,7 +166,12 @@ function Cart({ isOpen, setIsOpen }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity * exchangeRate, 0);
+const subtotal = cartItems.reduce((acc, item) => {
+  const priceAfterDiscount = item.discount > 0
+    ? item.price * (1 - item.discount / 100)
+    : item.price;
+  return acc + priceAfterDiscount * item.quantity * exchangeRate;
+}, 0);
 
   return (
     <div
@@ -216,7 +221,7 @@ function Cart({ isOpen, setIsOpen }) {
             <div className="border-t pt-2">
               <div className="flex justify-between text-lg font-semibold">
                 <span>Subtotal</span>
-                <span>{subtotal.toLocaleString("vi-VN")} VND</span>
+                <span>{Math.round(subtotal).toLocaleString("vi-VN")} VND</span>
               </div>
               <p className="text-sm text-gray-500 mt-1">
                 Shipping and taxes calculated at checkout
