@@ -6,6 +6,7 @@ import api from "../../api/index";
 import QuickViewModal from "./QuickViewModal";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { Toastify } from "../../components/Toastify";
+import { useSelector } from "react-redux";
 
 function ProductsGrid({ viewMode, filters, setFilters }) {
   const dispatch = useDispatch();
@@ -23,38 +24,14 @@ function ProductsGrid({ viewMode, filters, setFilters }) {
   const [quickViewProductId, setQuickViewProductId] = useState(null);
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const exchangeRate = 25000;
+  const sessionKey =
     localStorage.getItem("guest_session_key") ||
     (() => {
       const newSessionKey = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem("guest_session_key", newSessionKey);
       return newSessionKey;
     })();
-  const [user, setUser] = useState(
-    JSON.parse(localStorage.getItem("user") || "null")
-  );
-
-  useEffect(() => {
-    const validateUser = async () => {
-      if (user && user.user_id) {
-        try {
-          const response = await api.get("/user");
-          if (response.data.status === "success" && response.data.user) {
-            setUser(response.data.user);
-            localStorage.setItem("user", JSON.stringify(response.data.user));
-          } else {
-            throw new Error("Invalid user data");
-          }
-        } catch (err) {
-          console.error("User validation error:", err);
-          setUser(null);
-          localStorage.removeItem("user");
-          dispatch(logoutUser());
-          Toastify.error("Session expired. Please login again.");
-        }
-      }
-    };
-    validateUser();
-  }, [dispatch, user]);
+const user = useSelector((state) => state.user.user);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -150,48 +127,26 @@ const fetchProducts = async () => {
     }));
   };
 
-  // Helper để thêm guest cart vào localStorage
-  const addToLocalGuestCart = (productId) => {
-    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
-    const existing = localCart.find(item => item.product_id === productId);
-    if (existing) {
-      existing.quantity += 1;
-    } else {
-      localCart.push({ product_id: productId, quantity: 1 });
-    }
-    localStorage.setItem('guest_cart', JSON.stringify(localCart));
-  };
-
   const handleAddToCart = async (productId) => {
-    const product = products.find((p) => p.product_id === productId);
-    if (!product || product.stock_quantity <= 0) {
-      Toastify.error("Product out of stock.");
-      return;
+    const data = { product_id: productId, quantity: 1 };
+    if (!user?.user_id) {
+      data.session_key = sessionKey;
     }
 
-    if (!user) {
-      addToLocalGuestCart(productId);
-      Toastify.success("Added to cart successfully!");
-      window.dispatchEvent(new CustomEvent("cartUpdated"));
-    } else {
-      const endpoint = "/carts";
-      const data = { product_id: productId, quantity: 1 };
-
-      try {
-        const response = await api.post(endpoint, data);
-        if (response.data.status === "success") {
-          Toastify.success("Added to cart successfully!");
-          window.dispatchEvent(new CustomEvent("cartUpdated"));
-        } else {
-          Toastify.error(response.data.message || "Failed to add to cart.");
-        }
-      } catch (err) {
-        if (err.response?.status === 401) {
-          dispatch(logoutUser());
-          Toastify.error("Session expired. Please login again.");
-        } else {
-          Toastify.error(err.response?.data?.message || "Network or server error.");
-        }
+    try {
+      const response = await api.post('/cart', data);
+      if (response.data.status === "success") {
+        Toastify.success("Added to cart!");
+        window.dispatchEvent(new CustomEvent("cartUpdated"));
+      } else {
+        Toastify.error(response.data.message || "Failed to add to cart.");
+      }
+    } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(logoutUser());
+        Toastify.error("Session expired. Please login again.");
+      } else {
+        Toastify.error(err.response?.data?.message || "Network error.");
       }
     }
   };

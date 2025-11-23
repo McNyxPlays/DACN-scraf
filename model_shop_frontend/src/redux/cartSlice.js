@@ -6,13 +6,13 @@ export const fetchCartCount = createAsyncThunk(
   'cart/fetchCount',
   async ({ userId, sessionKey }, { rejectWithValue }) => {
     try {
+      let response;
       if (userId) {
-        const response = await api.get('/carts');
-        return response.data.data?.length || 0;
+        response = await api.get('/cart');
       } else {
-        const localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
-        return localCart.length;
+        response = await api.get('/cart', { params: { session_key: sessionKey } });
       }
+      return response.data.data?.length || 0;
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Fetch cart failed');
     }

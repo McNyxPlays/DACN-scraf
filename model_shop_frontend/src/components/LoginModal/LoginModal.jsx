@@ -1,10 +1,14 @@
 // src/components/LoginModal/LoginModal.jsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import api from "../../api/index";
 import { useDispatch } from "react-redux";
 import { updateUser } from "../../redux/userSlice";
 import { fetchCartCount } from "../../redux/cartSlice";
+import { Toastify } from "../Toastify";
 import "./LoginModal.css";
+
+const openEyeIcon = <i className="ri-eye-line text-gray-500"></i>;
+const closedEyeIcon = <i className="ri-eye-off-line text-gray-500"></i>;
 
 function LoginModal({ isOpen, setIsOpen, onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -28,190 +32,265 @@ function LoginModal({ isOpen, setIsOpen, onLoginSuccess }) {
     document.body.style.overflow = "auto";
   };
 
+  // ==================== LOGIN ====================
   const handleSubmitLogin = async (e) => {
     e.preventDefault();
-    const email = e.target.loginEmail.value.trim();
-    const password = e.target.loginPassword.value;
-    const remember_me = rememberMe;
+    setError("");
+    const form = e.target;
+    const email = form.elements.loginEmail.value.trim();
+    const password = form.elements.loginPassword.value;
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError("Invalid email format.");
+    if (!email || !password) {
+      setError("Please fill in both email and password");
       return;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
-try {
-      const response = await api.post("/login", { email, password, remember_me });
-      const userData = response.data.user;
-
-      localStorage.setItem("user", JSON.stringify(userData));
-      dispatch(updateUser(userData));
-
-      // Call onLoginSuccess for cart merge (from App.jsx)
-      await onLoginSuccess(userData);
-
-      // Dispatch fetchCartCount to update cart count after merge
-      dispatch(fetchCartCount({ userId: userData.user_id }));
-
-      // Trigger custom event for other listeners (e.g., Header)
-      window.dispatchEvent(new CustomEvent("cartUpdated"));
-
-      setSuccess(response.data.message);
-      setError("");
-      handleClose();
-      // Removed window.location.reload() to prevent redirect
-    } catch (err) {
-      const msg = err.response?.data?.message || "Login failed. Please try again.";
-      setError(msg);
-      console.error("Login error:", err);
-    }
-  };
-
-  const handleSubmitRegister = async (e) => {
-    e.preventDefault();
-    const email = e.target.registerEmail.value.trim();
-    const password = e.target.registerPassword.value;
-    const confirmPassword = e.target.confirmPassword.value;
-    const full_name = e.target.fullName.value.trim();
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Invalid email format.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Invalid email format");
       return;
     }
 
     try {
-      const response = await api.post("/register", { email, password, full_name });
-      setSuccess(response.data.message);
-      setError("");
-      setIsLogin(true); // Chuyển sang login
+      const response = await api.post("/auth/login", {
+        email,
+        password,
+        remember_me: rememberMe,
+      });
+
+      const userData = response.data.user;
+
+      dispatch(updateUser(userData));
+
+      if (onLoginSuccess && typeof onLoginSuccess === "function") {
+        await onLoginSuccess(userData);
+      }
+
+      dispatch(fetchCartCount({ userId: userData.user_id }));
+
+      Toastify.success("Login successful!");
+      handleClose();
     } catch (err) {
-      const msg = err.response?.data?.message || "Registration failed.";
+      const msg = err.response?.data?.message || "Login failed. Please try again.";
       setError(msg);
+      Toastify.error(msg);
     }
   };
 
-  useEffect(() => {
-    if (isOpen) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "auto";
-    return () => { document.body.style.overflow = "auto"; };
-  }, [isOpen]);
+  // ==================== REGISTER ====================
+  const handleSubmitRegister = async (e) => {
+    e.preventDefault();
+    setError("");
+    const form = e.target;
+    const fullName = form.elements.fullName.value.trim();
+    const email = form.elements.registerEmail.value.trim();
+    const password = form.elements.registerPassword.value;
+    const confirmPassword = form.elements.confirmPassword.value;
+
+    if (!fullName || !email || !password || !confirmPassword) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    try {
+      await api.post("/auth/register", { email, password, full_name: fullName });
+      Toastify.success("Registration successful! Please log in.");
+      setIsLogin(true);
+      setSuccess("Account created! You can now log in.");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Registration failed. Please try again.";
+      setError(msg);
+      Toastify.error(msg);
+    }
+  };
 
   if (!isOpen) return null;
 
-  const openEyeIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5 text-gray-500">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-
-  const closedEyeIcon = (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-5 h-5 text-gray-500">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.977 9.977 0 012.133-3.175m2.075-1.65A9.977 9.977 0 0112 5c4.478 0 8.268 2.943 9.542 7a9.977 9.977 0 01-2.133 3.175m-2.075 1.65a10.05 10.05 0 01-3.459 1.825m-1.875-1.825A3 3 0 0112 15a3 3 0 011.875 1.825m-1.875-1.825A3 3 0 0112 9a3 3 0 011.875 1.825" />
-    </svg>
-  );
-
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 relative shadow-2xl">
-        <button onClick={handleClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-          <i className="ri-close-line ri-xl"></i>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto relative">
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-700 z-10"
+        >
+          ×
         </button>
 
-        {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg mb-4">{error}</div>}
-        {success && <div className="bg-green-50 text-green-600 p-3 rounded-lg mb-4">{success}</div>}
+        <div className="p-8">
+          <h2 className="text-3xl font-bold text-center mb-8">
+            {isLogin ? "Sign In" : "Create Account"}
+          </h2>
 
-        {isLogin ? (
-          <div>
-            <h2 className="text-2xl font-bold text-center mb-6">Sign In</h2>
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm">
+              {success}
+            </div>
+          )}
+
+          {/* ==================== LOGIN FORM ==================== */}
+          {isLogin ? (
             <form onSubmit={handleSubmitLogin}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="loginEmail">Email</label>
-                <input type="email" id="loginEmail" name="loginEmail" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Email" required />
+              <div className="mb-5">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  name="loginEmail"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="you@example.com"
+                  required
+                />
               </div>
+
               <div className="mb-4 relative">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="loginPassword">Password</label>
-                <input type={showLoginPassword ? "text" : "password"} id="loginPassword" name="loginPassword" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Password" required />
-                <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Password
+                </label>
+                <input
+                  type={showLoginPassword ? "text" : "password"}
+                  name="loginPassword"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary pr-12"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6"
+                >
                   {showLoginPassword ? closedEyeIcon : openEyeIcon}
                 </button>
               </div>
+
               <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <label className="custom-checkbox">
-                    <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-                    <span className="checkmark"></span>
-                  </label>
-                  <span className="ml-2 text-sm text-gray-700">Remember me</span>
-                </div>
-                <a href="#" className="text-sm text-primary hover:underline">Forgot Password?</a>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span className="text-sm text-gray-600">Remember me</span>
+                </label>
+                <a href="#" className="text-sm text-primary hover:underline">
+                  Forgot password?
+                </a>
               </div>
-              <button type="submit" className="w-full bg-primary text-white py-3 font-medium rounded-lg hover:bg-primary/90 transition">
+
+              <button
+                type="submit"
+                className="w-full bg-primary text-white py-3.5 font-medium rounded-lg hover:bg-primary/90 transition"
+              >
                 Sign In
               </button>
             </form>
-            <p className="text-center text-gray-600 mt-6">
-              Don't have an account?{" "}
-              <button onClick={() => setIsLogin(false)} className="text-primary hover:underline">Sign Up</button>
-            </p>
-          </div>
-        ) : (
-          <div>
-            <h2 className="text-2xl font-bold text-center mb-6">Create Account</h2>
+          ) : (
+            /* ==================== REGISTER FORM ==================== */
             <form onSubmit={handleSubmitRegister}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="fullName">Full Name</label>
-                <input type="text" id="fullName" name="fullName" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Full Name" required />
+              <div className="mb-5">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  name="fullName"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="John Doe"
+                  required
+                />
               </div>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="registerEmail">Email</label>
-                <input type="email" id="registerEmail" name="registerEmail" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Email" required />
+
+              <div className="mb-5">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  name="registerEmail"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="you@example.com"
+                  required
+                />
               </div>
+
               <div className="mb-4 relative">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="registerPassword">Password</label>
-                <input type={showRegisterPassword ? "text" : "password"} id="registerPassword" name="registerPassword" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Password" required />
-                <button type="button" onClick={() => setShowRegisterPassword(!showRegisterPassword)} className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Password
+                </label>
+                <input
+                  type={showRegisterPassword ? "text" : "password"}
+                  name="registerPassword"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary pr-12"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6"
+                >
                   {showRegisterPassword ? closedEyeIcon : openEyeIcon}
                 </button>
               </div>
-              <div className="mb-4 relative">
-                <label className="block text-gray-700 text-sm mb-2" htmlFor="confirmPassword">Confirm Password</label>
-                <input type={showConfirmPassword ? "text" : "password"} id="confirmPassword" name="confirmPassword" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="Confirm Password" required />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6">
+
+              <div className="mb-6 relative">
+                <label className="block text-gray-700 text-sm font-medium mb-2">
+                  Confirm Password
+                </label>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary pr-12"
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 mt-6"
+                >
                   {showConfirmPassword ? closedEyeIcon : openEyeIcon}
                 </button>
               </div>
-              <div className="flex items-center mb-6">
-                <label className="custom-checkbox">
-                  <input type="checkbox" id="termsCheckbox" name="termsCheckbox" />
-                  <span className="checkmark"></span>
-                </label>
-                <span className="ml-2 text-sm text-gray-700">
-                  I agree to the <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>
-                </span>
-              </div>
-              <button type="submit" className="w-full bg-primary text-white py-3 font-medium rounded-lg hover:bg-primary/90 transition">
+
+              <button
+                type="submit"
+                className="w-full bg-primary text-white py-3.5 font-medium rounded-lg hover:bg-primary/90 transition"
+              >
                 Create Account
               </button>
             </form>
-            <p className="text-center text-gray-600 mt-6">
-              Already have an account?{" "}
-              <button onClick={() => setIsLogin(true)} className="text-primary hover:underline">Sign In</button>
-            </p>
-          </div>
-        )}
+          )}
+
+          <p className="text-center text-gray-600 mt-6">
+            {isLogin ? "Don't have an account? " : "Already have an account? "}
+            <button
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError("");
+                setSuccess("");
+              }}
+              className="text-primary font-medium hover:underline"
+            >
+              {isLogin ? "Sign Up" : "Sign In"}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

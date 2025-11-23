@@ -3,335 +3,170 @@ const db = require('../config/db');
 const { sanitizeInput, logError } = require('../config/functions');
 const fs = require('fs').promises;
 const path = require('path');
+const bcrypt = require('bcrypt');
+const app = require('../app');
+const redisClient = require('../config/redis');
 
 const getUserStats = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(401).json({ status: 'error', message: 'Unauthorized: Please log in' });
-  }
+  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
 
   const user_id = req.session.user_id;
+  const cacheKey = `user_stats_${user_id}`;
 
+  let stats = await redisClient.get(cacheKey);
+  if (stats) {
+    stats = JSON.parse(stats);
+    return res.json({ status: 'success', ...stats });
+  }
+
+  let conn;
   try {
-    const pool = await db.getConnection();
+    conn = await db.getConnection();
 
-    const [followerRows] = await pool.query('SELECT COUNT(*) as count FROM follows WHERE following_id = ?', [user_id]);
-    const followers = followerRows[0].count;
+    const [followers] = await conn.query('SELECT COUNT(*) as count FROM follows WHERE following_id = ?', [user_id]);
+    const [following] = await conn.query('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?', [user_id]);
+    const [posts] = await conn.query('SELECT COUNT(*) as count FROM posts WHERE user_id = ?', [user_id]);
 
-    const [followingRows] = await pool.query('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?', [user_id]);
-    const following = followingRows[0].count;
+    stats = {
+      followers: followers[0].count,
+      following: following[0].count,
+      posts: posts[0].count
+    };
 
-    const [postRows] = await pool.query('SELECT COUNT(*) as count FROM posts WHERE user_id = ? AND is_approved = TRUE', [user_id]);
-    const posts = postRows[0].count;
-
-    res.status(200).json({ status: 'success', followers, following, posts });
+    await redisClient.set(cacheKey, JSON.stringify(stats), 'EX', 600); // Cache 10 phút
+    res.json({ status: 'success', ...stats });
   } catch (error) {
-    await logError('Error fetching stats: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Error fetching stats: ' + error.message });
+    await logError('getUserStats error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to fetch stats' });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
 const getUsersMana = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ success: false, message: 'Unauthorized - No session' });
-  }
+  if (!req.session.user_id) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
 
+  let conn;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
+    conn = await db.getConnection();
+    const [user] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
+    if (user[0].role !== 'admin') return res.status(403).json({ status: 'error', message: 'Admin only' });
 
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized - Not an admin' });
-    }
-
-    if (req.query.id) {
-      const id = parseInt(req.query.id);
-      const [userRows] = await pool.query(
-        'SELECT user_id, email, phone_number, address, role, full_name, gender, is_active, created_at FROM users WHERE user_id = ?',
-        [id]
-      );
-      const user = userRows[0];
-      if (user) {
-        res.json({ success: true, message: 'User fetched', data: [user] });
-      } else {
-        res.status(404).json({ success: false, message: 'User not found' });
-      }
-    } else {
-      const search = req.query.search ? `%${req.query.search}%` : '%';
-      const is_active = parseInt(req.query.is_active) >= 0 ? parseInt(req.query.is_active) : -1;
-      let query = 'SELECT user_id, email, phone_number, address, role, full_name, gender, is_active, created_at FROM users WHERE email LIKE ? OR phone_number LIKE ?';
-      const params = [search, search];
-      if (is_active >= 0) {
-        query += ' AND is_active = ?';
-        params.push(is_active);
-      }
-      const [users] = await pool.query(query, params);
-      res.json({ success: true, message: 'Users fetched', data: users });
-    }
+    const [users] = await conn.query('SELECT user_id, email, full_name, role, created_at FROM users ORDER BY created_at DESC');
+    res.json({ status: 'success', users });
   } catch (error) {
-    await logError('Failed to fetch users: ' + error.message);
-    res.status(500).json({ success: false, message: 'Failed to fetch users: ' + error.message });
-  }
-};
-
-const updateUserMana = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ success: false, message: 'Unauthorized - No session' });
-  }
-
-  try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized - Not an admin' });
-    }
-
-    const id = parseInt(req.query.id);
-    const { email, phone_number, address, role, full_name, gender, is_active } = req.body;
-
-    if (id <= 0 || !email || !full_name) {
-      return res.status(400).json({ success: false, message: 'Invalid input' });
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ success: false, message: 'Invalid email format' });
-    }
-
-    const [existingEmail] = await pool.query('SELECT user_id FROM users WHERE email = ? AND user_id != ?', [email, id]);
-    if (existingEmail.length) {
-      return res.status(400).json({ success: false, message: 'Email already exists' });
-    }
-
-    const [result] = await pool.query(
-      'UPDATE users SET email = ?, phone_number = ?, address = ?, role = ?, full_name = ?, gender = ?, is_active = ? WHERE user_id = ?',
-      [email, phone_number || null, address || null, role, full_name, gender || null, is_active, id]
-    );
-
-    if (result.affectedRows > 0) {
-      res.json({ success: true, message: 'User updated' });
-    } else {
-      res.status(404).json({ success: false, message: 'No changes made to user' });
-    }
-  } catch (error) {
-    await logError('Failed to update user: ' + error.message);
-    res.status(500).json({ success: false, message: 'Failed to update user: ' + error.message });
-  }
-};
-
-const deleteUserMana = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ success: false, message: 'Unauthorized - No session' });
-  }
-
-  try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized - Not an admin' });
-    }
-
-    const id = parseInt(req.query.id);
-    if (id <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid user ID' });
-    }
-
-    const [result] = await pool.query('DELETE FROM users WHERE user_id = ?', [id]);
-    if (result.affectedRows > 0) {
-      res.json({ success: true, message: 'User deleted' });
-    } else {
-      res.status(404).json({ success: false, message: 'User not found' });
-    }
-  } catch (error) {
-    await logError('Failed to delete user: ' + error.message);
-    res.status(500).json({ success: false, message: 'Failed to delete user: ' + error.message });
-  }
-};
-
-const getUserImages = async (req, res) => {
-  if (!req.session.user_id) {
-    await logError('Unauthorized: Please log in');
-    return res.status(401).json({ status: 'error', message: 'Unauthorized: Please log in' });
-  }
-
-  const user_id = req.session.user_id;
-
-  try {
-    const pool = await db.getConnection();
-    const [images] = await pool.query(
-      'SELECT image_id, image_url, image_type FROM user_images WHERE user_id = ? AND is_active = TRUE',
-      [user_id]
-    );
-
-    const user_images = { profile: null, banner: null };
-    images.forEach(image => {
-      if (image.image_type === 'profile') user_images.profile = image.image_url;
-      else if (image.image_type === 'banner') user_images.banner = image.image_url;
-    });
-
-    res.status(200).json({ status: 'success', images: user_images });
-  } catch (error) {
-    await logError('Error fetching user images: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Error fetching user images: ' + error.message });
-  }
-};
-
-const getUser = async (req, res) => {
-  if (!req.session.user_id) {
-    await logError('Unauthorized: Please log in');
-    return res.status(401).json({ status: 'error', message: 'Unauthorized: Please log in' });
-  }
-
-  const user_id = req.session.user_id;
-
-  try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query(
-      'SELECT user_id, email, full_name, phone_number, gender, address, role, is_active, created_at FROM users WHERE user_id = ? AND is_active = TRUE',
-      [user_id]
-    );
-    const user = userRows[0];
-
-    if (!user) {
-      return res.status(404).json({ status: 'error', message: 'User not found' });
-    }
-
-    const [imageRows] = await pool.query(
-      'SELECT image_url FROM user_images WHERE user_id = ? AND image_type = "profile" AND is_active = TRUE LIMIT 1',
-      [user_id]
-    );
-    user.profile_image = imageRows[0]?.image_url || '';
-
-    res.json({ status: 'success', user });
-  } catch (error) {
-    await logError('Failed to fetch user: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch user: ' + error.message });
+    await logError('getUsersMana error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to fetch users' });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
 const updateUser = async (req, res) => {
-  if (!req.session.user_id) {
-    await logError('Unauthorized: Please log in');
-    return res.status(401).json({ status: 'error', message: 'Unauthorized: Please log in' });
-  }
-
   const user_id = req.session.user_id;
-  const { full_name, email, phone_number, gender, address, role, is_active, password } = req.body;
-  const profile_image = req.files?.profile_image;
+  if (!user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
 
+  const { full_name, email, password, phone_number, address, gender } = req.body;
+  const profile_image = req.files?.profile_image?.[0];
+  const banner_image = req.files?.banner_image?.[0];
+
+  let conn;
   try {
-    const pool = await db.getConnection();
-    await pool.query('START TRANSACTION');
+    conn = await db.getConnection();
+    await conn.query('START TRANSACTION');
 
-    const [existingUser] = await pool.query('SELECT email FROM users WHERE user_id = ?', [user_id]);
-    if (!existingUser[0]) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ status: 'error', message: 'User not found' });
+    let query = 'UPDATE users SET';
+    const params = [];
+
+    if (full_name) {
+      query += ' full_name = ?,'; 
+      params.push(sanitizeInput(full_name));
     }
-
-    if (email && email !== existingUser[0].email) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        await pool.query('ROLLBACK');
-        return res.status(400).json({ status: 'error', message: 'Invalid email format' });
-      }
-
-      const [emailCheck] = await pool.query('SELECT user_id FROM users WHERE email = ? AND user_id != ?', [email, user_id]);
-      if (emailCheck.length) {
-        await pool.query('ROLLBACK');
-        return res.status(400).json({ status: 'error', message: 'Email already exists' });
-      }
+    if (email) {
+      query += ' email = ?,'; 
+      params.push(sanitizeInput(email));
     }
-
-    let query = 'UPDATE users SET full_name = ?, email = ?, phone_number = ?, gender = ?, address = ?, role = ?, is_active = ?';
-    const params = [full_name, email || existingUser[0].email, phone_number || null, gender || null, address || null, role, is_active];
-
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
-      query += ', password = ?';
+      query += ' password = ?,'; 
       params.push(hashedPassword);
     }
+    if (phone_number) {
+      query += ' phone_number = ?,'; 
+      params.push(sanitizeInput(phone_number));
+    }
+    if (address) {
+      query += ' address = ?,'; 
+      params.push(sanitizeInput(address));
+    }
+    if (gender) {
+      query += ' gender = ?,'; 
+      params.push(sanitizeInput(gender));
+    }
 
+    if (profile_image) {
+      const filename = `${Date.now()}_${profile_image.originalname}`;
+      const filepath = path.join(__dirname, '../Uploads/avatars', filename);
+      await fs.mkdir(path.dirname(filepath), { recursive: true });
+      await fs.writeFile(filepath, profile_image.buffer);
+      query += ' profile_image = ?,'; 
+      params.push(`Uploads/avatars/${filename}`);
+    }
+
+    if (banner_image) {
+      const filename = `${Date.now()}_${banner_image.originalname}`;
+      const filepath = path.join(__dirname, '../Uploads/banners', filename);
+      await fs.mkdir(path.dirname(filepath), { recursive: true });
+      await fs.writeFile(filepath, banner_image.buffer);
+      query += ' banner_image = ?,'; 
+      params.push(`Uploads/banners/${filename}`);
+    }
+
+    if (params.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No fields to update' });
+    }
+
+    query = query.slice(0, -1); // Remove last comma
     query += ' WHERE user_id = ?';
     params.push(user_id);
 
-    await pool.query(query, params);
+    const [result] = await conn.query(query, params);
+    if (result.affectedRows === 0) throw new Error('No changes');
 
-    if (profile_image) {
-      const ext = path.extname(profile_image.originalname).toLowerCase();
-      if (!['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) {
-        await pool.query('ROLLBACK');
-        return res.status(400).json({ status: 'error', message: 'Invalid image format' });
-      }
-
-      const newFilename = `${Date.now()}_profile${ext}`;
-      const destination = path.join(__dirname, '../Uploads/avatars', newFilename);
-      await fs.mkdir(path.dirname(destination), { recursive: true });
-      await fs.writeFile(destination, profile_image.buffer);
-
-      await pool.query(
-        'UPDATE user_images SET is_active = FALSE WHERE user_id = ? AND image_type = "profile"',
-        [user_id]
-      );
-      await pool.query(
-        'INSERT INTO user_images (user_id, image_url, image_type, is_active) VALUES (?, ?, ?, ?)',
-        [user_id, newFilename, 'profile', true]
-      );
-    }
-
-    const [updatedUser] = await pool.query(
-      'SELECT user_id, email, full_name, phone_number, gender, address, role, is_active, created_at FROM users WHERE user_id = ? AND is_active = TRUE',
-      [user_id]
-    );
-
-    if (!updatedUser[0]) {
-      await pool.query('ROLLBACK');
-      return res.status(404).json({ status: 'error', message: 'User not found or no changes made' });
-    }
-
-    const [imageRows] = await pool.query(
-      'SELECT image_url FROM user_images WHERE user_id = ? AND image_type = "profile" AND is_active = TRUE LIMIT 1',
-      [user_id]
-    );
-    updatedUser[0].profile_image = imageRows[0]?.image_url || '';
-
-    await pool.query('COMMIT');
-    res.json({
-      status: 'success',
-      message: profile_image ? 'Profile updated with new image' : 'Profile updated successfully',
-      user: updatedUser[0]
-    });
+    await conn.query('COMMIT');
+    await redisClient.del(`user_stats_${user_id}`); // Invalidate stats cache
+    res.json({ status: 'success', message: 'User updated' });
   } catch (error) {
-    await pool.query('ROLLBACK');
-    await logError('PUT request error: ' + error.message);
+    await conn.query('ROLLBACK');
+    await logError('updateUser error: ' + error.message);
     res.status(500).json({ status: 'error', message: error.message });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
 const deleteUser = async (req, res) => {
-  if (!req.session.user_id) {
-    await logError('Unauthorized: Please log in');
-    return res.status(401).json({ status: 'error', message: 'Unauthorized: Please log in' });
-  }
+  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
 
   const user_id = req.session.user_id;
 
+  let conn;
   try {
-    const pool = await db.getConnection();
-    const [result] = await pool.query('UPDATE users SET is_active = FALSE WHERE user_id = ?', [user_id]);
-
+    conn = await db.getConnection();
+    const [result] = await conn.query('UPDATE users SET is_active = FALSE WHERE user_id = ?', [user_id]);
     if (result.affectedRows > 0) {
       req.session.destroy();
-      res.status(200).json({ status: 'success', message: 'User account deactivated' });
+      await redisClient.del(`user_stats_${user_id}`);
+      res.json({ status: 'success', message: 'Deactivated' });
     } else {
-      res.status(404).json({ status: 'error', message: 'User not found' });
+      res.status(404).json({ status: 'error', message: 'Not found' });
     }
   } catch (error) {
-    await logError('Deletion failed: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Deletion failed: ' + error.message });
+    await logError('deleteUser error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to deactivate' });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
-module.exports = { getUserStats, getUsersMana, updateUserMana, deleteUserMana, getUserImages, getUser, updateUser, deleteUser };
+module.exports = { getUserStats, getUsersMana, updateUser, deleteUser };

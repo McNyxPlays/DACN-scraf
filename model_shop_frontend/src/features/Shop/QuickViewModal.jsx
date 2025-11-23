@@ -5,6 +5,7 @@ import { logoutUser } from "../../redux/userSlice";
 import api from "../../api/index";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { Toastify } from "../../components/Toastify";
+import { useSelector } from "react-redux";
 
 function QuickViewModal({ productId, isOpen, toggleModal }) {
   const dispatch = useDispatch();
@@ -20,41 +21,14 @@ function QuickViewModal({ productId, isOpen, toggleModal }) {
       localStorage.setItem("guest_session_key", newSessionKey);
       return newSessionKey;
     })();
-  const [user, setUser] = useState(
-    JSON.parse(localStorage.getItem("user") || "null")
-  );
-
-  useEffect(() => {
-    const validateUser = async () => {
-      if (user && user.user_id) {
-        try {
-          const response = await api.get("/user");
-          if (response.data.status === "success" && response.data.user) {
-            setUser(response.data.user);
-            localStorage.setItem("user", JSON.stringify(response.data.user));
-          } else {
-            throw new Error("Invalid user data");
-          }
-        } catch (err) {
-          console.error("User validation error:", err);
-          setUser(null);
-          localStorage.removeItem("user");
-          dispatch(logoutUser());
-          Toastify.error("Session expired. Please login again.");
-        }
-      }
-    };
-    validateUser();
-  }, [isOpen, dispatch]);
+  const user = useSelector((state) => state.user.user);
 
   useEffect(() => {
     if (isOpen && productId) {
       const fetchProduct = async () => {
         setLoading(true);
         try {
-          const response = await api.get("/products/product", {
-            params: { id: productId }
-          });
+          const response = await api.get(`/products/${productId}`);
           if (response.data.status === "success") {
             setProduct(response.data.data);
             setError("");
@@ -90,51 +64,32 @@ function QuickViewModal({ productId, isOpen, toggleModal }) {
     });
   };
 
-  // Helper để thêm guest cart vào localStorage
-  const addToLocalGuestCart = (productId, qty) => {
-    let localCart = JSON.parse(localStorage.getItem('guest_cart') || '[]');
-    const existing = localCart.find(item => item.product_id === productId);
-    if (existing) {
-      existing.quantity += qty;
-    } else {
-      localCart.push({ product_id: productId, quantity: qty });
-    }
-    localStorage.setItem('guest_cart', JSON.stringify(localCart));
-  };
-
   const handleAddToCart = async () => {
     if (!product || product.stock_quantity < quantity) {
       Toastify.error("Insufficient stock or product unavailable.");
       return;
     }
 
+    const data = { product_id: product.product_id, quantity };
     if (!user) {
-      // Guest: Lưu vào localStorage (chỉ lưu khi thanh toán ở checkout)
-      addToLocalGuestCart(product.product_id, quantity);
-      Toastify.success("Đã thêm vào giỏ hàng thành công!");
-      window.dispatchEvent(new CustomEvent("cartUpdated"));
-      setTimeout(() => toggleModal(), 1500); // Delay để hiển thị toast
-    } else {
-      // User: Gọi API như cũ
-      const endpoint = "/carts";
-      const data = { product_id: product.product_id, quantity };
+      data.session_key = sessionKey;
+    }
 
-      try {
-        const response = await api.post(endpoint, data);
-        if (response.data.status === "success") {
-          Toastify.success("Đã thêm vào giỏ hàng thành công!");
-          window.dispatchEvent(new CustomEvent("cartUpdated"));
-          setTimeout(() => toggleModal(), 1500); // Delay để hiển thị toast
-        } else {
-          Toastify.error(response.data.message || "Thêm vào giỏ hàng thất bại.");
-        }
-      } catch (err) {
-        if (err.response?.status === 401) {
-          dispatch(logoutUser());
-          Toastify.error("Session expired. Please login again.");
-        } else {
-          Toastify.error(err.response?.data?.message || "Lỗi mạng hoặc máy chủ.");
-        }
+    try {
+      const response = await api.post('/cart', data);
+      if (response.data.status === "success") {
+        Toastify.success("Added to cart!");
+        window.dispatchEvent(new CustomEvent("cartUpdated"));
+        setTimeout(() => toggleModal(), 1500);
+      } else {
+        Toastify.error(response.data.message || "Failed to add to cart.");
+      }
+    } catch (err) {
+      if (err.response?.status === 401) {
+        dispatch(logoutUser());
+        Toastify.error("Session expired. Please login again.");
+      } else {
+        Toastify.error(err.response?.data?.message || "Network error.");
       }
     }
   };

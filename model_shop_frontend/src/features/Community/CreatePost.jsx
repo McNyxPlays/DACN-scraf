@@ -13,41 +13,23 @@ function CreatePost({ user, onPostSubmit }) {
 
   const handlePostSubmit = async (e) => {
     e.preventDefault();
-    if (!user) {
-      Toastify.error("Please log in to post.");
-      return;
-    }
-    if (!newPost.content.trim() && newPost.images.length === 0) {
-      Toastify.error("Please add content or an image.");
-      return;
-    }
+    if (!newPost.content.trim() && newPost.images.length === 0) return Toastify.error("Add content or image");
 
     const formData = new FormData();
     formData.append("content", newPost.content);
-    formData.append("post_time_status", "new");
-    newPost.images.forEach((image, index) => {
-      formData.append(`images[${index}]`, image);
-    });
+    newPost.images.forEach((file) => formData.append("images", file));
 
     try {
-      const response = await api.post("/posts", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const response = await api.post("/posts", formData, { headers: { "Content-Type": "multipart/form-data" } });
       if (response.data.status === "success") {
-        onPostSubmit?.(response.data.post);
+        onPostSubmit(response.data.post);
         setNewPost({ content: "", images: [] });
-        Toastify.success("Post created successfully!");
       }
     } catch (err) {
-    console.error("Post error:", err.response || err);
-    if (err.response?.status === 401) {
-      Toastify.error("Session expired. Please log in again.");
-    } else {
-      Toastify.error(err.response?.data?.message || "Failed to create post.");
+      Toastify.error(err.response?.data?.message || "Post failed");
     }
-  }
-};
-
+  };
+  
   return (
     <div className="bg-white rounded-lg shadow-sm mb-6 overflow-hidden">
       <div className="flex border-b border-gray-200">

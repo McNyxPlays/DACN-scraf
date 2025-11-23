@@ -1,44 +1,59 @@
+// src/features/Community/RightSidebar.jsx
 import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
-import styles from "../../styles/CommunityHub.module.css";
+import { useSelector } from "react-redux";
 import api from "../../api/index";
 
 const BASE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
 
-function RightSidebar({ user }) {
-  const [userData, setUserData] = useState(null);
+function RightSidebar({ user: propUser }) {
+  const reduxUser = useSelector((state) => state.user.user);
+  const userLoading = useSelector((state) => state.user.loading);
+  const userError = useSelector((state) => state.user.error);
+  const currentUser = propUser || reduxUser;
+
   const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 });
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (user && user.user_id) {
-        try {
-          const userResponse = await api.get("/user");
-          const statsResponse = await api.get("/user/stats"); // Fix endpoint
-          setUserData(userResponse.data.user);
+    const fetchUserStats = async () => {
+      if (userLoading || userError || !currentUser?.user_id) return; // Skip if loading, error or no user
+
+      try {
+        const response = await api.get("/user/stats");
+        if (response.data.status === "success") {
           setStats({
-            followers: statsResponse.data.followers,
-            following: statsResponse.data.following,
-            posts: statsResponse.data.posts,
+            followers: response.data.followers || 0,
+            following: response.data.following || 0,
+            posts: response.data.posts || 0,
           });
-        } catch (err) {
-          console.error("Error fetching user data:", err);
+        }
+      } catch (err) {
+        if (err.response?.status === 401) {
+          console.warn("Session expired - logging out silently");
+          // Optional: Dispatch logout if needed
+        } else {
+          console.error("Error fetching user stats:", err);
         }
       }
     };
 
-    fetchUserData();
-  }, [user]);
+    fetchUserStats();
+  }, [currentUser, userLoading, userError]);
+
+  if (!currentUser) {
+    return <div className="hidden lg:block"></div>;
+  }
 
   return (
     <div className="w-full lg:w-80 space-y-6">
+      {/* User Profile Card */}
       <div className="bg-white rounded-lg shadow-sm p-4">
         <div className="flex items-center gap-3 mb-4">
-          {userData?.profile_image ? (
+          {currentUser.profile_image ? (
             <img
-              src={`${BASE_BACKEND_URL}/${userData.profile_image}`} // Fix src
-              alt="User Profile"
+              src={`${BASE_BACKEND_URL}/Uploads/avatars/${currentUser.profile_image}`}
+              alt="Profile"
               className="w-12 h-12 rounded-full object-cover"
+              onError={(e) => (e.target.src = "/placeholder.jpg")}
             />
           ) : (
             <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
@@ -47,55 +62,31 @@ function RightSidebar({ user }) {
           )}
           <div>
             <div className="font-medium text-gray-900">
-              {userData?.full_name || user?.full_name || "User"}
+              {currentUser.full_name || "User"}
             </div>
+            <div className="text-sm text-gray-500">@{currentUser.email?.split("@")[0]}</div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="bg-gray-100 rounded p-2 text-center">
+
+        <div className="grid grid-cols-3 gap-2 text-center py-3 border-t border-gray-200">
+          <div>
             <div className="font-bold text-gray-900">{stats.posts}</div>
             <div className="text-xs text-gray-500">Posts</div>
           </div>
-          <div className="bg-gray-100 rounded p-2 text-center">
+          <div>
             <div className="font-bold text-gray-900">{stats.followers}</div>
             <div className="text-xs text-gray-500">Followers</div>
           </div>
-        </div>
-        <NavLink
-          to="/profile"
-          className="block text-center text-primary font-medium hover:underline"
-        >
-          View Profile
-        </NavLink>
-      </div>
-      <div className="bg-white rounded-lg shadow-sm p-4">
-        <h3 className="font-semibold text-gray-900 mb-4 px-2">
-          Trending Topics
-        </h3>
-        <div className="space-y-3">
-          <div className="flex gap-3 p-2 hover:bg-gray-50 rounded-lg">
-            <div className="w-10 h-10 flex items-center justify-center bg-primary/10 text-primary rounded-full flex-shrink-0">
-              <i className="ri-hashtag"></i>
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-900 text-sm">#ModelKits</h4>
-              <div className="text-xs text-gray-500">1.2k posts</div>
-            </div>
+          <div>
+            <div className="font-bold text-gray-900">{stats.following}</div>
+            <div className="text-xs text-gray-500">Following</div>
           </div>
         </div>
-        <div className="mt-3 text-center">
-          <a
-            href="#"
-            className="text-primary text-sm font-medium hover:underline"
-          >
-            View More
-          </a>
-        </div>
       </div>
+
+      {/* Trending Topics */}
       <div className="bg-white rounded-lg shadow-sm p-4">
-        <h3 className="font-semibold text-gray-900 mb-4 px-2">
-          Popular Discussions
-        </h3>
+        <h3 className="font-semibold text-gray-900 mb-4 px-2">Trending Topics</h3>
         <div className="space-y-3">
           <div className="flex gap-3 p-2 hover:bg-gray-50 rounded-lg">
             <div className="w-10 h-10 flex items-center justify-center bg-primary/10 text-primary rounded-full flex-shrink-0">
@@ -114,32 +105,34 @@ function RightSidebar({ user }) {
           </div>
         </div>
         <div className="mt-3 text-center">
-          <a
-            href="#"
-            className="text-primary text-sm font-medium hover:underline"
-          >
+          <a href="#" className="text-primary text-sm font-medium hover:underline">
             View More
           </a>
         </div>
       </div>
+
+      {/* Community Poll */}
       <div className="bg-white rounded-lg shadow-sm p-4">
-        <h3 className="font-semibold text-gray-900 mb-4 px-2">
-          Community Poll
-        </h3>
+        <h3 className="font-semibold text-gray-900 mb-4 px-2">Community Poll</h3>
         <div className="px-2">
           <h4 className="font-medium text-gray-900 mb-3">
             What's your favorite model kit scale?
           </h4>
           <div className="space-y-2 mb-4">
-            <div className="flex items-center">
-              <label className={styles.customCheckbox}>
-                <input type="radio" name="scale" value="1/144" />
-                <span className={styles.checkmark}></span>
-              </label>
-              <span className="ml-2 text-gray-700">1/144 Scale</span>
-            </div>
+            <label className="flex items-center">
+              <input type="radio" name="scale" value="1/144" className="mr-2" />
+              <span className="text-gray-700">1/144 Scale</span>
+            </label>
+            <label className="flex items-center">
+              <input type="radio" name="scale" value="1/100" className="mr-2" />
+              <span className="text-gray-700">1/100 Scale</span>
+            </label>
+            <label className="flex items-center">
+              <input type="radio" name="scale" value="1/60" className="mr-2" />
+              <span className="text-gray-700">1/60 Scale</span>
+            </label>
           </div>
-          <button className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-primary/90 transition rounded-button whitespace-nowrap">
+          <button className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-primary/90 transition">
             Vote
           </button>
         </div>

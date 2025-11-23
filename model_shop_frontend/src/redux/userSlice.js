@@ -1,18 +1,23 @@
-// userSlice.js
+// src/redux/userSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../api/index';
 
 export const validateUser = createAsyncThunk(
   'user/validateUser',
   async (_, { rejectWithValue, getState }) => {
-    const { user: { loading } } = getState(); // FIX: Check if already loading to prevent loop
-    if (loading) return rejectWithValue('Validation in progress'); // Skip if ongoing
+    const { user: { user, loading } } = getState();
+    if (loading) return rejectWithValue('Validation in progress');
+    if (!user?.user_id) return rejectWithValue('No user to validate');
+
     try {
-      const response = await api.get('/user');
+      const response = await api.get('/user/stats');
       return response.data.user;
     } catch (err) {
-      localStorage.removeItem('user');
-      return rejectWithValue(err.response?.data?.message || 'Validation failed');
+      const message = err.response?.data?.message || 'Validation failed';
+      if (err.response?.status === 401 && message === 'Unauthorized') {
+        return rejectWithValue('Session expired');
+      }
+      return rejectWithValue(message);
     }
   }
 );
@@ -21,7 +26,7 @@ export const logoutUser = createAsyncThunk(
   'user/logoutUser',
   async (_, { rejectWithValue }) => {
     try {
-      await api.post('/logout');
+      await api.post('/auth/logout');
       localStorage.removeItem('guest_session_key');
       return null;
     } catch (err) {
@@ -32,7 +37,7 @@ export const logoutUser = createAsyncThunk(
 
 const userSlice = createSlice({
   name: 'user',
-  initialState: { user: null, loading: false, error: null, toastShown: false }, // ADD: Flag for toast
+  initialState: { user: null, loading: false, error: null, toastShown: false }, 
   reducers: {
     updateUser: (state, action) => {
       state.user = action.payload;
@@ -40,7 +45,7 @@ const userSlice = createSlice({
     clearUser: (state) => {
       state.user = null;
     },
-    resetToast: (state) => { // ADD: Reset flag
+    resetToast: (state) => { 
       state.toastShown = false;
     },
   },
@@ -56,8 +61,12 @@ const userSlice = createSlice({
       .addCase(validateUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        state.user = null;
-        if (!state.toastShown) { // ADD: Only show toast once
+        if (action.payload === 'Session expired') {
+          state.user = null;
+          localStorage.removeItem('user');
+          window.dispatchEvent(new CustomEvent("userLoggedOut")); // Trigger regenerate guest_session_key
+        }
+        if (!state.toastShown) { 
           state.toastShown = true;
         }
       })

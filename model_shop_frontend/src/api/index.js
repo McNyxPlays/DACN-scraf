@@ -14,19 +14,16 @@ let isValidating = false;
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    if (error.response?.status === 401) {
-      // Nếu đang trong quá trình validate → bỏ qua
+    if (error.response?.status === 401 && !error.config.url.includes('/user/stats')) { 
       if (isValidating) {
-        console.warn('401 handled silently for validation (skip re‑validate)');
+        console.warn('401 handled silently for validation (skip re-validate)');
         return Promise.reject(error);
       }
 
-      // Bắt đầu validate
       isValidating = true;
       try {
         await store.dispatch(validateUser()).unwrap();
       } catch (e) {
-        // Validate thất bại → logout ngay
         await store.dispatch(logoutUser()).unwrap();
       } finally {
         isValidating = false;
@@ -35,6 +32,7 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
 // === Optional: Interceptors để tự động cập nhật CSRF token ===
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('csrf_token') || 
@@ -48,7 +46,6 @@ api.interceptors.response.use(
   (error) => {
     // Xử lý lỗi chung (401, 403, v.v.)
     if (error.response?.status === 401) {
-      sessionStorage.removeItem('user');
       localStorage.removeItem('user');
       if (process.env.NODE_ENV === 'development') {
         console.warn('401 handled silently for validation');  // Reduce red errors

@@ -4,7 +4,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logoutUser } from "../redux/userSlice";
 import { fetchCartCount } from "../redux/cartSlice";
-import { useSession } from "../context/SessionContext"; // ← Import
+import { useSession } from "../context/SessionContext";
 
 const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -15,9 +15,9 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
   const user = useSelector((state) => state.user.user);
   const cartCount = useSelector((state) => state.cart.count);
   const notificationCount = useSelector((state) => state.notifications.count);
-  const userLoading = useSelector((state) => state.user.loading); // ← Added to skip fetches during validation
+  const userLoading = useSelector((state) => state.user.loading);
 
-  const { sessionKey } = useSession(); // ← Lấy từ context
+  const { sessionKey } = useSession();
 
   const toggleDropdown = () => setIsDropdownOpen((prev) => !prev);
 
@@ -25,10 +25,10 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
     try {
       await dispatch(logoutUser()).unwrap();
       localStorage.removeItem("user");
-      localStorage.removeItem("guest_session_key"); // ← XÓA (no transfer to guest; fresh guest after logout)
+      localStorage.removeItem("guest_session_key");
       localStorage.removeItem("guest_cart");
       window.dispatchEvent(new CustomEvent("cartUpdated"));
-      window.dispatchEvent(new CustomEvent("userLoggedOut")); // ← Kích hoạt reset session
+      window.dispatchEvent(new CustomEvent("userLoggedOut"));
       navigate("/");
     } catch (err) {
       console.error("Logout error:", err);
@@ -37,21 +37,21 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
     }
   };
 
-  // Lắng nghe cập nhật giỏ hàng
+  // Lắng nghe cập nhật giỏ hàng và cập nhật tự động
   useEffect(() => {
-    const handleCartUpdate = () => {
-      if (userLoading) return; // ← Skip if user validation is pending (prevents premature 401)
-      if (user?.user_id) {
-        dispatch(fetchCartCount({})); // ← Chỉ cần biết là user đã login
-      } else {
-        dispatch(fetchCartCount({ sessionKey }));
-      }
+    const fetchCount = () => {
+      if (userLoading) return;
+      const params = user?.user_id
+        ? { userId: user.user_id }
+        : { sessionKey };
+      dispatch(fetchCartCount(params));
     };
 
-    handleCartUpdate(); // Gọi ngay lần đầu
+    fetchCount(); // Fetch ban đầu
+    const handleCartUpdate = fetchCount; // Gọi lại khi có event
     window.addEventListener("cartUpdated", handleCartUpdate);
     return () => window.removeEventListener("cartUpdated", handleCartUpdate);
-  }, [dispatch, user, sessionKey, userLoading]); // ← Added userLoading dependency
+  }, [dispatch, user?.user_id, sessionKey, userLoading]);
 
   // Click ngoài dropdown
   React.useEffect(() => {
@@ -101,48 +101,26 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
           </nav>
         </div>
 
-        {/* === RIGHT: Search → Cart → Track → Sign In (Desktop Only) === */}
+        {/* === RIGHT: Icons === */}
         <div className="flex items-center gap-4">
 
-          {/* 1. SEARCH BAR */}
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-56 pl-10 pr-4 py-2 rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:bg-white text-sm transition"
-            />
-            <i className="ri-search-line absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
-          </div>
-
-          {/* 2. CART */}
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative w-10 h-10 flex items-center justify-center text-gray-700 hover:bg-gray-100 rounded-full transition"
+            className="relative text-gray-600 hover:text-primary transition"
           >
-            <i className="ri-shopping-cart-line ri-xl"></i>
+            <i className="ri-shopping-cart-line ri-lg"></i>
             {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-primary text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                {cartCount}
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {cartCount > 99 ? "99+" : cartCount}
               </span>
             )}
           </button>
 
-          {/* 3. ORDER TRACKER */}
-          <NavLink
-            to="/orderstatus"
-            className="flex items-center gap-1 text-gray-600 hover:text-primary transition"
-            title="Check Order Status"
-          >
-            <i className="ri-truck-line ri-lg"></i>
-            <span className="text-sm">Track</span>
-          </NavLink>
-
-          {/* 4. SIGN IN / USER MENU */}
-          {user ? (
+          {user?.user_id ? (
             <div ref={dropdownRef} className="relative">
               <button
                 onClick={toggleDropdown}
-                className="flex items-center gap-1 text-gray-700 hover:text-primary transition"
+                className="flex items-center gap-2 text-gray-700 hover:text-primary transition"
               >
                 {user.profile_image ? (
                   <img src={user.profile_image} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />

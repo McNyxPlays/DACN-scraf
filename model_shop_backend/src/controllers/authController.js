@@ -1,3 +1,4 @@
+// src/controllers/authController.js
 const db = require('../config/db');
 const { sanitizeInput, logError } = require('../config/functions');
 const bcrypt = require('bcrypt');
@@ -25,9 +26,10 @@ const register = async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  let conn;
   try {
-    const pool = await db.getConnection();
-    const [rows] = await pool.query(
+    conn = await db.getConnection();
+    const [rows] = await conn.query(
       'INSERT INTO users (email, password, full_name, is_active) VALUES (?, ?, ?, ?)',
       [sanitizedEmail, hashedPassword, sanitizedFullName, true]
     );
@@ -39,6 +41,8 @@ const register = async (req, res) => {
       await logError('Registration failed: ' + error.message);
       res.status(400).json({ message: 'Registration failed: ' + error.message });
     }
+  } finally {
+    if (conn) conn.release();
   }
 };
 
@@ -55,13 +59,16 @@ const login = async (req, res) => {
     return res.status(400).json({ message: 'Email and password are required' });
   }
 
+  let conn;
   try {
-    const pool = await db.getConnection();
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [sanitizedEmail]);
+    conn = await db.getConnection();
+    const [rows] = await conn.query(
+      'SELECT user_id, email, full_name, role, password, is_active, profile_image, banner_image FROM users WHERE email = ?',
+      [sanitizedEmail]
+    );
     const user = rows[0];
 
     if (!user) {
-      req.session.loginAttempts = (req.session.loginAttempts || 0) + 1;
       await logError(`Error: User not found for email=${sanitizedEmail}`);
       return res.status(401).json({ message: 'User not found' });
     }
@@ -93,7 +100,8 @@ const login = async (req, res) => {
           email: user.email,
           full_name: user.full_name,
           role: user.role,
-          profile_image: user.profile_image || null
+          profile_image: user.profile_image || null,
+          banner_image: user.banner_image || null  // Thêm compat schema mới
         }
       });
     } else {
@@ -104,12 +112,15 @@ const login = async (req, res) => {
   } catch (error) {
     await logError('Login failed: ' + error.message);
     res.status(500).json({ message: 'Login failed: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
 const logout = (req, res) => {
   req.session.destroy((err) => {
     if (err) {
+      logError('Logout failed: ' + err.message);
       return res.status(500).json({ message: 'Logout failed' });
     }
     res.clearCookie('connect.sid'); // Xóa cookie session
