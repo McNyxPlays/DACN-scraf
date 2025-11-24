@@ -36,6 +36,8 @@ const { addPost, getPosts, updatePost, deletePost, getPostImages, getComments } 
 const { applyPromotion, getPromotionsMana, addPromotion, updatePromotion, deletePromotion } = require('../controllers/promotionController');
 const { getCounts } = require('../controllers/countController');
 
+const { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice} = require('../controllers/orderController');
+
 // ====================== AUTH ======================
 router.post('/auth/register', register);
 router.post('/auth/login', login);
@@ -105,5 +107,16 @@ router.delete('/brands/mana', deleteBrand);
 
 // ====================== ADMIN DASHBOARD ======================
 router.get('/admin/counts', getCounts);
+
+// ====================== ORDERS (ĐÃ SỬA ĐÚNG) ======================
+router.get('/orders', (req, res) => {
+  const { action, order_code } = req.query;
+  if (action === 'csrf_token') return getCsrfToken(req, res);
+  if (action === 'status' && order_code) return getOrderStatus(req, res);
+  if (action === 'invoice' && order_code) return getOrderInvoice(req, res);
+  res.status(400).json({ status: 'error', message: 'Invalid action' });
+});
+
+router.post('/orders', createOrder);
 
 module.exports = router;

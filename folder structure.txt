@@ -17,7 +17,8 @@ model_shop_backend/
 │   │       postController.js        
 │   │       notificationController.js
 │   │       promotionController.js  
-│   │       countController.js       
+│   │       countController.js   
+│   │       orderController.js
 │   │
 │   ├───routes/
 │   │       api.js

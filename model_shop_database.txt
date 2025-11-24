@@ -112,34 +112,40 @@ CREATE TABLE IF NOT EXISTS stores (
 -- Bảng 8: orders (gộp transactions vào đây)
 CREATE TABLE IF NOT EXISTS orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT,
-    guest_email VARCHAR(255),
-    guest_phone VARCHAR(20),
+    user_id INT NULL, 
+    
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NULL,
+    phone_number VARCHAR(20) NULL,
+    shipping_address TEXT NOT NULL,
+    
     total_amount DECIMAL(12,2) NOT NULL,
     discount_amount DECIMAL(12,2) DEFAULT 0.00,
     shipping_cost DECIMAL(12,2) DEFAULT 0.00,
-    final_amount DECIMAL(12,2) NOT NULL,
-    status ENUM('pending','processing','shipped','delivered','cancelled') DEFAULT 'pending',
-    order_code VARCHAR(50) UNIQUE,
-    shipping_address TEXT,
+    final_amount DECIMAL(12,2) NOT NULL, 
+    
+    order_code VARCHAR(50) UNIQUE NOT NULL,
+    status ENUM('pending','processing','shipped','delivered','cancelled','refunded') DEFAULT 'pending',
+    payment_status ENUM('pending','paid','failed','refunded') DEFAULT 'pending',
+    payment_method ENUM('cod','bank_transfer','momo','vnpay','zalopay','paypal') DEFAULT 'cod',
+    
     shipping_method ENUM('standard','fast','express','store_pickup') DEFAULT 'standard',
     store_id INT NULL,
-
-    payment_method ENUM('cod','bank_transfer','momo','vnpay','zalopay') DEFAULT 'cod',
-    payment_status ENUM('pending','completed','failed') DEFAULT 'pending',
+    
     paid_at TIMESTAMP NULL,
-    external_transaction_id VARCHAR(255) NULL,  -- mã giao dịch Momo/VNPay...
-
+    external_transaction_id VARCHAR(255) NULL,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
     FOREIGN KEY (store_id) REFERENCES stores(store_id) ON DELETE SET NULL,
 
     INDEX idx_user_id (user_id),
-    INDEX idx_status (status),
     INDEX idx_order_code (order_code),
-    INDEX idx_created_at (created_at),
-    INDEX idx_payment_method (payment_method)
+    INDEX idx_status (status),
+    INDEX idx_payment_status (payment_status),
+    INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng 9: order_details

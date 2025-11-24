@@ -116,6 +116,12 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
             )}
           </button>
 
+            <NavLink 
+              to="/orderstatus" 
+               className="text-gray-600 hover:text-primary relative ml-2"  >
+                <i className="ri-file-search-line ri-lg"></i>
+            </NavLink>
+
           {user?.user_id ? (
             <div ref={dropdownRef} className="relative">
               <button
