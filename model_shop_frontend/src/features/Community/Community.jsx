@@ -43,30 +43,36 @@ const Community = () => {
   const handleLike = async (postId) => {
     if (!user) return Toastify.error("Please log in to like");
     try {
-      const response = await api.put("/posts?action=like", { post_id: postId });
+      const response = await api.put("/posts", { 
+      action: "like", 
+      post_id: postId 
+    });
       setPosts((prev) =>
         prev.map((p) =>
           p.post_id === postId ? { ...p, is_liked: response.data.liked, like_count: response.data.like_count } : p
         )
       );
-      Toastify.success("Liked!");
     } catch (err) {
       Toastify.error("Failed to like post");
     }
   };
 
-  const handleCommentSubmit = async (postId, content) => {
-    if (!user) return Toastify.error("Please log in to comment");
-    if (!content.trim()) return;
+const handleCommentSubmit = async (postId, content) => {
+  if (!user) return Toastify.error("Please log in to comment");
+  if (!content.trim()) return;
 
-    try {
-      await api.put("/posts?action=comment", { post_id: postId, content });
-      fetchPosts(); // Refresh to update comment_count
-      Toastify.success("Comment added!");
-    } catch (err) {
-      Toastify.error("Failed to add comment");
-    }
-  };
+  try {
+    await api.put("/posts", { 
+      action: "comment", 
+      post_id: postId, 
+      content 
+    });
+    fetchPosts();
+    Toastify.success("Comment added!");
+  } catch (err) {
+    Toastify.error("Failed to add comment");
+  }
+};
 
   const handleDeletePost = (postId) => {
     setPosts((prev) => prev.filter((p) => p.post_id !== postId));

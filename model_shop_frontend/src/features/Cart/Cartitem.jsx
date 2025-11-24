@@ -27,12 +27,12 @@ function CartItem({ item, exchangeRate, onUpdate }) {
       onUpdate?.();
       // Không hiện Toast "Cart updated!" nữa → UX sạch hơn
     } catch (err) {
-      Toastify.error("Cập nhật số lượng thất bại");
+      Toastify.error("Update the number of failures");
     }
   };
 
   const handleRemove = async () => {
-    if (!confirm("Xóa sản phẩm này khỏi giỏ hàng?")) return;
+    if (!confirm("Delete this product from the cart?")) return;
 
     try {
       const data = { cart_id: item.cart_id };
@@ -40,9 +40,9 @@ function CartItem({ item, exchangeRate, onUpdate }) {
 
       await api.delete("/cart", { data });
       onUpdate?.();
-      Toastify.success("Đã xóa sản phẩm");
+      Toastify.success("Product deleted");
     } catch (err) {
-      Toastify.error("Xóa thất bại");
+      Toastify.error("Delete failed");
     }
   };
 
@@ -74,7 +74,7 @@ function CartItem({ item, exchangeRate, onUpdate }) {
         </div>
 
         <p className="text-xs text-gray-500 mt-1">
-          {item.quantity} × sản phẩm
+          {item.quantity} × product
         </p>
       </div>
 
@@ -104,7 +104,7 @@ function CartItem({ item, exchangeRate, onUpdate }) {
           onClick={handleRemove}
           className="text-xs text-red-600 hover:text-red-700 mt-3"
         >
-          Xóa
+          Delete
         </button>
       </div>
     </div>

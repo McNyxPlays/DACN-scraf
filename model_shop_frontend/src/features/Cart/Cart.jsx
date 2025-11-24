@@ -27,7 +27,7 @@ function Cart({ isOpen, setIsOpen }) {
       setCartItems(response.data.items || []);
       setError("");
     } catch (err) {
-      setError("Không tải được giỏ hàng");
+      setError("Failed to load cart");
       console.error("Cart fetch error:", err);
     } finally {
       setLoading(false);
@@ -48,7 +48,7 @@ function Cart({ isOpen, setIsOpen }) {
 
   // XÓA TẤT CẢ
   const handleClearCart = async () => {
-    if (!confirm("Xóa toàn bộ sản phẩm trong giỏ hàng?")) return;
+    if (!confirm("Clear all items in the cart?")) return;
 
     try {
       const payload = user?.user_id ? {} : { session_key: sessionKey };
@@ -77,20 +77,20 @@ function Cart({ isOpen, setIsOpen }) {
       <div ref={cartRef} className="bg-white w-full max-w-md h-full overflow-y-auto flex flex-col">
         {/* Header */}
         <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
-          <h2 className="text-xl font-bold">Giỏ hàng ({cartItems.length})</h2>
+          <h2 className="text-xl font-bold">Cart ({cartItems.length})</h2>
           <button onClick={() => setIsOpen(false)} className="text-2xl">&times;</button>
         </div>
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="text-center py-12">Đang tải...</div>
+            <div className="text-center py-12">Loading...</div>
           ) : error ? (
             <p className="text-red-500 text-center">{error}</p>
           ) : cartItems.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <i className="ri-shopping-cart-2-line text-6xl mb-4 block"></i>
-              <p>Giỏ hàng trống</p>
+              <p>Your cart is empty</p>
             </div>
           ) : (
             <>
@@ -100,7 +100,7 @@ function Cart({ isOpen, setIsOpen }) {
                   onClick={handleClearCart}
                   className="text-sm text-red-600 hover:text-red-700 underline"
                 >
-                  Xóa tất cả
+                  Clear all
                 </button>
               </div>
 
@@ -122,7 +122,7 @@ function Cart({ isOpen, setIsOpen }) {
         {cartItems.length > 0 && (
           <div className="border-t bg-white p-6">
             <div className="flex justify-between text-xl font-bold mb-5">
-              <span>Tổng cộng</span>
+              <span>Subtotal</span>
               <span className="text-primary">
                 {Math.round(subtotal).toLocaleString("vi-VN")} ₫
               </span>
@@ -133,13 +133,13 @@ function Cart({ isOpen, setIsOpen }) {
                 onClick={handleCheckout}
                 className="w-full bg-primary text-white py-3.5 rounded-lg font-medium hover:bg-primary/90 transition"
               >
-                Thanh toán
+                Checkout
               </button>
               <button
                 onClick={() => setIsOpen(false)}
                 className="w-full border border-gray-300 py-3.5 rounded-lg font-medium hover:bg-gray-50 transition"
               >
-                Tiếp tục mua sắm
+                Continue shopping
               </button>
             </div>
           </div>

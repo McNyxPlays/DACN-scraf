@@ -1,0 +1,3 @@
+[2025-11-24T10:25:12.045Z] Error updating post: Cannot set headers after they are sent to the client
+[2025-11-24T10:28:14.125Z] Error updating post: Cannot set headers after they are sent to the client
+[2025-11-24T10:28:44.778Z] Error updating post: Cannot set headers after they are sent to the client

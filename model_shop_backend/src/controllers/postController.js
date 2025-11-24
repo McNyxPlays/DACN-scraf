@@ -127,14 +127,18 @@ const updatePost = async (req, res) => {
 
     if (action === 'comment') {
       if (!content) return res.status(400).json({ status: 'error', message: 'Content required' });
-      await conn.query('INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)', [post_id, user_id, sanitizeInput(content)]);
-      res.json({ status: 'success', message: 'Commented' });
+      await conn.query('INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)', 
+        [post_id, user_id, sanitizeInput(content)]
+      );
+      return res.json({ status: 'success', message: 'Commented' }); // ĐÃ THÊM RETURN
     }
 
-    res.status(400).json({ status: 'error', message: 'Invalid action' });
+    // Nếu không phải like cũng không phải comment
+    return res.status(400).json({ status: 'error', message: 'Invalid action' });
+
   } catch (error) {
     await logError('Error updating post: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Error updating post: ' + error.message });
+    return res.status(500).json({ status: 'error', message: 'Server error' });
   } finally {
     if (conn) conn.release();
   }
