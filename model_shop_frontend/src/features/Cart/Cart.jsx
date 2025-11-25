@@ -6,12 +6,11 @@ import api from "../../api/index";
 import { Toastify } from "../../components/Toastify";
 import CartItem from "./CartItem";
 import { useSession } from "../../context/SessionContext";
-
+import { EXCHANGE_RATE } from "../../utils/constants";
 function Cart({ isOpen, setIsOpen }) {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const exchangeRate = 25000;
   const user = useSelector((state) => state.user.user);
   const navigate = useNavigate();
   const cartRef = useRef(null);
@@ -68,7 +67,7 @@ function Cart({ isOpen, setIsOpen }) {
   const subtotal = cartItems.reduce((sum, item) => {
     const price = item.discount > 0 ? item.price * (1 - item.discount / 100) : item.price;
     return sum + price * item.quantity;
-  }, 0) * exchangeRate;
+  }, 0) * EXCHANGE_RATE;
 
   if (!isOpen) return null;
 
@@ -109,7 +108,7 @@ function Cart({ isOpen, setIsOpen }) {
                   <CartItem
                     key={item.cart_id}
                     item={item}
-                    exchangeRate={exchangeRate}
+                    exchangeRate={EXCHANGE_RATE}
                     onUpdate={() => window.dispatchEvent(new CustomEvent("cartUpdated"))}
                   />
                 ))}
