@@ -1,71 +1,71 @@
-// src/features/Checkout/OrderSuccess.jsx
-import React from "react";
-import { useLocation } from "react-router-dom";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
+// src/features/checkout/OrderSuccess.jsx
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import api from "../../api";
+import { setLastOrder } from "../../redux/orderSlice";
+import { formatCurrency } from "../../utils/formatCurrency";
+import { usePDFHandlers } from "../../utils/usePDFHandlers";
 
 const OrderSuccess = () => {
-  const { state } = useLocation();
-  const order = state?.order || {};
-  const exchangeRate = 25000;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const formatCurrency = (amount) => {
-    const value = (Number(amount) * exchangeRate).toFixed(2);
-    return `₫${Number(value).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-  };
+  const stateOrder = location.state?.order;
+  const lastOrderFromRedux = useSelector((state) => state.order.lastOrder);
+  const params = new URLSearchParams(location.search);
+  const orderCode = params.get("order_code");
 
-  const handleDownloadPDF = () => {
-    const doc = new jsPDF();
+  const { handleDownloadPDF, handleViewPDF } = usePDFHandlers(order); 
 
-    // Title
-    doc.setFontSize(18);
-    doc.text("Order Invoice", 105, 20, { align: "center" });
+  useEffect(() => {
+    const fetchOrder = async () => {
+      try {
+        if (stateOrder?.order_id) {
+          setOrder(stateOrder);
+          dispatch(setLastOrder(stateOrder));
+          setLoading(false);
+          return;
+        }
 
-    // Order Info
-    doc.setFontSize(12);
-    doc.text(`Order Code: ${order.order_code || "N/A"}`, 20, 40);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, 50);
-    doc.text(`Full Name: ${order.full_name || "N/A"}`, 20, 60);
-    doc.text(`Address: ${order.address || "N/A"}`, 20, 70);
-    doc.text(`Email: ${order.email || "N/A"}`, 20, 80);
-    doc.text(`Phone: ${order.phone_number || "N/A"}`, 20, 90);
+        if (lastOrderFromRedux?.order_id) {
+          setOrder(lastOrderFromRedux);
+          setLoading(false);
+          return;
+        }
 
-    // Items Table
-    if (order.details?.length > 0) {
-      doc.autoTable({
-        startY: 100,
-        head: [["Item", "Quantity", "Price"]],
-        body: order.details.map((item) => [
-          item.name,
-          item.quantity,
-          formatCurrency(item.price_at_purchase)
-        ]),
-      });
-    }
+        if (orderCode) {
+          const res = await api.get(`/orders/code/${orderCode}`);
+          setOrder(res.data.order);
+          dispatch(setLastOrder(res.data.order));
+          setLoading(false);
+          return;
+        }
 
-    // Totals
-    const finalY = doc.lastAutoTable.finalY || 100;
-    doc.text(`Subtotal: ${formatCurrency(order.total_amount - order.shipping_cost + (order.discount_amount || 0))}`, 20, finalY + 20);
-    doc.text(`Shipping: ${order.shipping_cost === 0 ? "Free" : formatCurrency(order.shipping_cost)}`, 20, finalY + 30);
-    if (order.discount_amount > 0) {
-      doc.text(`Discount: -${formatCurrency(order.discount_amount)}`, 20, finalY + 40);
-    }
-    doc.text(`Total: ${formatCurrency(order.total_amount)}`, 20, finalY + 50);
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to fetch order:", err);
+        setLoading(false);
+      }
+    };
 
-    // Save PDF
-    doc.save(`invoice_${order.order_code}.pdf`);
-  };
+    fetchOrder();
+  }, [stateOrder, lastOrderFromRedux, orderCode, dispatch]);
 
-  if (!order.order_id) {
+  if (loading) {
+    return <div className="min-h-screen bg-gray-100 flex items-center justify-center text-2xl">Loading...</div>;
+  }
+
+  if (!order?.order_id) {
     return (
-      <div className="bg-gray-100 min-h-screen p-6">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-3xl font-bold mb-6">Error</h1>
-          <p className="text-lg">No order information available.</p>
-          <button
-            onClick={() => (window.location.href = "/")}
-            className="mt-6 bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600"
-          >
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <h1 className="text-4xl font-bold text-red-600 mb-4">Order Not Found</h1>
+          <p className="mb-6">The link may have expired or the order does not exist.</p>
+          <button onClick={() => navigate("/")} className="bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700">
             Back to Home
           </button>
         </div>
@@ -74,90 +74,40 @@ const OrderSuccess = () => {
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-center">
-          Order Success
-        </h1>
-        <h2 className="text-2xl font-semibold mb-4 text-center">
-          Invoice Statement
-        </h2>
-        <p className="text-lg text-center">
-          Thank you for your order! Your order number is{" "}
-          <strong>{order.order_code || "N/A"}</strong>.
-        </p>
-        {order.promotions?.length > 0 && order.discount_amount > 0 && (
-          <p className="text-lg text-center mt-4">
-            Promo code <strong>{order.promotions[0]?.code || "N/A"}</strong>{" "}
-            applied, saving you{" "}
-            <strong>{formatCurrency(order.discount_amount)}</strong>.
-          </p>
-        )}
-        <div className="mt-6 bg-white p-6 rounded shadow">
-          <h3 className="text-xl font-semibold mb-4">Order Summary</h3>
-          <div className="space-y-4">
-            {order.details?.length > 0 && (
-              <div>
-                <h4 className="text-lg font-semibold mb-2">Items Ordered</h4>
-                {order.details.map((item, index) => (
-                  <div key={index} className="border-b py-2">
-                    <p>{item.name} - Qty: {item.quantity} - Price: {formatCurrency(item.price_at_purchase)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>
-                  {formatCurrency(
-                    order.total_amount -
-                      order.shipping_cost +
-                      (order.discount_amount || 0)
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Shipping</span>
-                <span>{order.shipping_cost === 0 ? "Free" : formatCurrency(order.shipping_cost)}</span>
-              </div>
-              {order.discount_amount > 0 && (
-                <div className="flex justify-between">
-                  <span>Discount</span>
-                  <span>-{formatCurrency(order.discount_amount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold">
-                <span>Total</span>
-                <span>{formatCurrency(order.total_amount)}</span>
-              </div>
-            </div>
-            {order.shipping_method === "store_pickup" ? (
-              <div className="mt-4">
-                <h4 className="text-lg font-semibold">Pickup Location</h4>
-                <p>Store ID: {order.store_id || "N/A"}</p>
-              </div>
-            ) : (
-              <div className="mt-4">
-                <h4 className="text-lg font-semibold">Shipping Address</h4>
-                <p>{order.shipping_address || "N/A"}</p>
-              </div>
-            )}
-          </div>
+    <div className="min-h-screen bg-gray-100 py-12 px-4">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden">
+        <div className="bg-green-600 text-white py-8 text-center">
+          <h1 className="text-4xl font-bold">ORDER SUCCESSFUL!</h1>
+          <p className="text-xl mt-3">Order Code: <strong className="text-2xl">{order.order_code}</strong></p>
         </div>
-        <div className="text-center mt-6">
-          <button
-            onClick={handleDownloadPDF}
-            className="bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 mr-4"
-          >
-            Download Invoice PDF
-          </button>
-          <button
-            onClick={() => (window.location.href = "/")}
-            className="bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600"
-          >
-            Back to Home
-          </button>
+        <div className="p-8 space-y-6">
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-bold mb-2">Customer Information</h2>
+              <p><strong>Name:</strong> {order.full_name}</p>
+              <p><strong>Address:</strong> {order.shipping_address}</p>
+              <p><strong>Email:</strong> {order.email}</p>
+              <p><strong>Phone:</strong> {order.phone_number}</p>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold mb-2">Order Summary</h2>
+              <p><strong>Subtotal:</strong> {formatCurrency(order.total_amount - order.shipping_cost + (order.discount_amount || 0))}</p>
+              <p><strong>Shipping Fee:</strong> {order.shipping_cost === 0 ? "Free" : formatCurrency(order.shipping_cost)}</p>
+              {order.discount_amount > 0 && <p className="text-red-600"><strong>Discount:</strong> -{formatCurrency(order.discount_amount)}</p>}
+              <p className="text-xl font-bold text-green-600"><strong>Total:</strong> {formatCurrency(order.total_amount)}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-4 mt-8">
+            <button onClick={handleViewPDF} className="bg-indigo-600 text-white px-8 py-4 rounded-lg font-bold hover:bg-indigo-700 flex items-center gap-3">
+              View Invoice
+            </button>
+            <button onClick={handleDownloadPDF} className="bg-green-600 text-white px-8 py-4 rounded-lg font-bold hover:bg-green-700 flex items-center gap-3">
+              Download PDF
+            </button>
+            <button onClick={() => navigate("/profile/orders")} className="bg-gray-700 text-white px-8 py-4 rounded-lg font-bold hover:bg-gray-800">
+              View Order History
+            </button>
+          </div>
         </div>
       </div>
     </div>

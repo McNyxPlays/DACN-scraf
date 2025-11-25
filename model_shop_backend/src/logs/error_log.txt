@@ -1,0 +1,1 @@
+[2025-11-25T15:27:14.060Z] Error fetching status: Unknown column 'updated_at' in 'field list'

@@ -93,6 +93,13 @@ model_shop_frontend
     │     │   SessionContext.jsx
     │     │	   SocketContext.jsx
     │
+    ├───utils/
+    │     ├── constants.js         
+    │     ├── formatCurrency.js   
+    │     ├── generateInvoicePDF.js
+    │     └── usePDFHandlers.js
+    │  
+    │
     ├───features
     │   ├───Admin
     │   │   │   Admin.jsx

@@ -175,12 +175,56 @@ const getOrderInvoice = async (req, res) => {
     const [order] = await conn.query('SELECT * FROM orders WHERE order_code = ?', [order_code]);
     if (!order.length) return res.status(404).json({ status: 'error', message: 'Order not found' });
 
-    const [details] = await conn.query('SELECT * FROM order_details WHERE order_id = ?', [order[0].order_id]);
-    res.json({ status: 'success', data: { ...order[0], details } });
+    const [details] = await conn.query(`
+      SELECT od.*, p.name, pi.image_url AS main_image
+      FROM order_details od
+      JOIN products p ON od.product_id = p.product_id
+      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
+      WHERE od.order_id = ?
+    `, [order[0].order_id]);
+
+    const [promotions] = await conn.query(`
+      SELECT p.*, op.applied_discount
+      FROM order_promotions op
+      JOIN promotions p ON op.promotion_id = p.promotion_id
+      WHERE op.order_id = ?
+    `, [order[0].order_id]);
+
+    res.json({ status: 'success', data: { ...order[0], details, promotions } });
   } catch (error) {
     await logError('Error fetching invoice: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
   }
 };
 
-module.exports = { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice };
+// Thêm vào cuối orderController.js
+const getOrderByCode = async (req, res) => {
+  const { order_code } = req.params;
+  try {
+    const conn = await db.getConnection();
+    const [order] = await conn.query('SELECT * FROM orders WHERE order_code = ?', [order_code]);
+    if (!order.length) return res.status(404).json({ message: 'Order not found' });
+
+    const [details] = await conn.query(`
+      SELECT od.*, p.name, pi.image_url AS main_image
+      FROM order_details od
+      JOIN products p ON od.product_id = p.product_id
+      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
+      WHERE od.order_id = ?
+    `, [order[0].order_id]);
+
+    const [promotions] = await conn.query(`
+      SELECT p.*, op.applied_discount
+      FROM order_promotions op
+      JOIN promotions p ON op.promotion_id = p.promotion_id
+      WHERE op.order_id = ?
+    `, [order[0].order_id]);
+
+    res.json({ order: { ...order[0], details, promotions } });
+  } catch (error) {
+    await logError('Error fetching order by code: ' + error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+module.exports = { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice, getOrderByCode };

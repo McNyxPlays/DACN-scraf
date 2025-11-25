@@ -99,7 +99,7 @@ const AppContent = () => {
           <Route path="/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
           <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
           <Route path="/checkout" element={<Checkout />} />
-          <Route path="/ordersuccess" element={<OrderSuccess />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/orderstatus" element={<OrderStatus />} />
 
           {/* Admin */}
