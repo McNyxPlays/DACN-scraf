@@ -3,8 +3,7 @@ node_modules/
 dist/
 .vite/
 *.log
-.env
-.env.*
+
 
 # VSCode config (optional)
 .vscode/
