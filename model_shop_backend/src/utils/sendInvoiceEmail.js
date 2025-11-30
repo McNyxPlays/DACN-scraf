@@ -9,9 +9,12 @@ async function sendInvoiceEmail(toEmail, order, pdfBuffer) {
     port: 587,
     secure: false,
     auth: {
-      user: 'anhhoa090@gmail.com',           // ← Email của bạn
-      pass: 'kxoh adoe rykz ysqs'            // ← App Password 16 ký tự (có dấu cách)
-    }
+      user: 'test1',           // ← Email của bạn
+      pass: '123jhdsfbjsdf'            // ← App Password 16 ký tự (có dấu cách)
+    },
+  tls: {
+    rejectUnauthorized: false      // ← Thêm dòng này nếu gặp lỗi SSL ở một số host
+  }
   });
 
   await transporter.sendMail({
