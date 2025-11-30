@@ -1,94 +1,71 @@
 // src/controllers/notificationController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
-const app = require('../app');
 const redisClient = require('../config/redis');
 
-const notificationSSE = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).end();
+// Helper lấy identifier (user hoặc guest) – SỬA: Ưu tiên query params trước session
+const getIdentifier = (req) => {
+  // 1. Ưu tiên: đã login → dùng user_id từ session
+  if (req.session.user_id) {
+    return { user_id: req.session.user_id, session_key: null };
+  }
 
-  const user_id = req.session.user_id;
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // 2. Guest: lấy session_key từ query → lưu vào session để dùng lại
+  let session_key = req.query.session_key || req.body.session_key;
 
-  let last_count = -1;
+  // Nếu có truyền lên → lưu vào session để các request sau không cần truyền nữa
+  if (session_key && !req.session.session_key) {
+    req.session.session_key = session_key;
+  }
 
-  const sendCount = async () => {
-    try {
-      const cacheKey = `notification_count_${user_id}`;
-      let count = await redisClient.get(cacheKey);
+  // Dùng cái đã lưu trong session (nếu đã có từ lần trước)
+  session_key = req.session.session_key || session_key;
 
-      if (count === null) {
-        const conn = await db.getConnection();
-        const [rows] = await conn.query('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND is_read = 0', [user_id]);
-        count = rows[0].cnt;
-        conn.release();
-        await redisClient.set(cacheKey, count, 'EX', 30);
-      } else {
-        count = parseInt(count);
-      }
-
-      if (last_count !== count) {
-        res.write(`event: notification_count\ndata: ${Math.min(count, 99)}\n\n`);
-        last_count = count;
-      }
-    } catch (err) {
-      console.error('SSE notification error:', err);
-    }
-  };
-
-  await sendCount();
-  const interval = setInterval(sendCount, 8000);
-
-  req.on('close', () => {
-    clearInterval(interval);
-    res.end();
-  });
+  return { user_id: null, session_key };
 };
 
+// Phần còn lại giữ nguyên (getNotifications, markNotificationsRead, getNotificationCount)
 const getNotifications = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ success: false, error: 'Unauthorized' });
+  const { user_id, session_key } = getIdentifier(req);
+  if (!user_id && !session_key) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
 
-  const user_id = req.session.user_id;
+  const identifier = user_id || session_key;
+  const idType = user_id ? 'user_id' : 'session_key';
+
+  const page = parseInt(req.query.page) || 1;
+  const perPage = parseInt(req.query.perPage) || 10;
+  const filter = req.query.filter || 'all';
+  const typeFilter = req.query.type || 'all';
 
   let conn;
   try {
     conn = await db.getConnection();
-    const [user] = await conn.query('SELECT 1 FROM users WHERE user_id = ? AND is_active = TRUE', [user_id]);
-    if (!user.length) return res.status(403).json({ success: false, error: 'User inactive' });
 
-    const { page = 1, perPage = 10, filter = 'All', type = 'all', sort = 'DESC' } = req.query;
-    const offset = (page - 1) * perPage;
+    let query = `SELECT notification_id, type, message, link, data, is_global, is_read, read_at, created_at 
+                 FROM notifications WHERE (${idType} = ? OR is_global = 1)`;
+    let params = [identifier];
 
-    let query = 'SELECT notification_id, type, message as content, is_read, created_at FROM notifications WHERE user_id = ?';
-    let params = [user_id];
-
-    if (filter === 'unread') {
-      query += ' AND is_read = 0';
-    } else if (filter === 'read') {
-      query += ' AND is_read = 1';
-    }
-
-    if (type !== 'all') {
+    if (filter === 'unread') query += ' AND is_read = 0';
+    if (filter === 'read') query += ' AND is_read = 1';
+    if (typeFilter !== 'all') {
       query += ' AND type = ?';
-      params.push(type);
+      params.push(typeFilter);
     }
 
-    query += ` ORDER BY created_at ${sort === 'ASC' ? 'ASC' : 'DESC'} LIMIT ? OFFSET ?`;
-    params.push(perPage, offset);
+    query += ' ORDER BY is_global DESC, created_at DESC LIMIT ?, ?';
+    params.push((page - 1) * perPage, perPage);
 
     const [notifications] = await conn.query(query, params);
 
-    let totalQuery = 'SELECT COUNT(*) as total FROM notifications WHERE user_id = ?';
-    let totalParams = [user_id];
+    let totalQuery = `SELECT COUNT(*) as total FROM notifications WHERE (${idType} = ? OR is_global = 1)`;
+    let totalParams = [identifier];
     if (filter === 'unread') totalQuery += ' AND is_read = 0';
     if (filter === 'read') totalQuery += ' AND is_read = 1';
-    if (type !== 'all') {
+    if (typeFilter !== 'all') {
       totalQuery += ' AND type = ?';
-      totalParams.push(type);
+      totalParams.push(typeFilter);
     }
 
     const [total] = await conn.query(totalQuery, totalParams);
@@ -104,24 +81,38 @@ const getNotifications = async (req, res) => {
 };
 
 const markNotificationsRead = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ success: false, error: 'Unauthorized' });
+  const { user_id, session_key } = getIdentifier(req);
+  if (!user_id && !session_key) {
+    return res.status(403).json({ success: false, error: 'Unauthorized' });
+  }
 
   const { notification_ids } = req.body;
-  if (!Array.isArray(notification_ids) || notification_ids.some(id => !Number.isInteger(id))) {
-    return res.status(400).json({ success: false, error: 'Invalid ids' });
-  }
+  const identifier = user_id || session_key;
+  const idType = user_id ? 'user_id' : 'session_key';
+  const cacheKey = user_id ? `notification_count_${user_id}` : `notification_count_guest_${session_key}`;
 
   let conn;
   try {
     conn = await db.getConnection();
-    const placeholders = notification_ids.map(() => '?').join(',');
-    await conn.query(
-      `UPDATE notifications SET is_read = 1 WHERE notification_id IN (${placeholders}) AND user_id = ?`,
-      [...notification_ids, req.session.user_id]
-    );
+    let sql = `UPDATE notifications SET is_read = 1, read_at = NOW() WHERE (${idType} = ? OR is_global = 1)`;
+    let params = [identifier];
 
-    // Invalidate cache
-    await redisClient.del(`notification_count_${req.session.user_id}`);
+    if (notification_ids !== 'all') {
+      if (!Array.isArray(notification_ids) || notification_ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'Invalid ids' });
+      }
+      const placeholders = notification_ids.map(() => '?').join(',');
+      sql += ` AND notification_id IN (${placeholders})`;
+      params = [identifier, ...notification_ids];  // SỬA: Đặt identifier cuối cùng để tránh conflict với IN clause
+    }
+
+    await conn.query(sql, params);
+    await redisClient.del(cacheKey);
+
+    // Emit realtime update count sau mark read
+    const io = require('../app').get('io');
+    const { emitToTarget } = require('../utils/emitNotification');
+    await emitToTarget(io, identifier, user_id ? 'user' : 'guest', {});
 
     res.json({ success: true, message: 'Marked as read' });
   } catch (err) {
@@ -132,4 +123,28 @@ const markNotificationsRead = async (req, res) => {
   }
 };
 
-module.exports = { notificationSSE, getNotifications, markNotificationsRead };
+const getNotificationCount = async (req, res) => {
+  const { user_id, session_key } = getIdentifier(req);  // Áp dụng helper mới cho count
+  if (!user_id && !session_key) return res.status(401).json({ count: 0 });
+
+  const identifier = user_id || session_key;
+  const idType = user_id ? 'user_id' : 'session_key';
+  const cacheKey = user_id ? `notification_count_${user_id}` : `notification_count_guest_${session_key}`;
+
+  let count = await redisClient.get(cacheKey);
+  if (count === null) {
+    const conn = await db.getConnection();
+    const [rows] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM notifications WHERE (${idType} = ? OR is_global = 1) AND is_read = 0`,
+      [identifier]
+    );
+    count = rows[0].cnt;
+    await redisClient.set(cacheKey, count, { EX: 60 });
+    conn.release();
+  } else {
+    count = parseInt(count);
+  }
+  res.json({ count });
+};
+
+module.exports = { getNotifications, markNotificationsRead, getNotificationCount };

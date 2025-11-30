@@ -4,11 +4,26 @@ const { logError } = require('../config/functions');
 const app = require('../app');
 const redisClient = require('../config/redis');
 
-// Helper: lấy identifier (user_id hoặc session_key)
-const getCartIdentifier = (req) => ({
-  user_id: req.session.user_id || null,
-  session_key: req.session.user_id ? null : (req.body.session_key || req.query.session_key)
-});
+// Helper: lấy identifier (user_id hoặc session_key) – SỬA HOÀN HẢO CHO GUEST
+const getCartIdentifier = (req) => {
+  // 1. Ưu tiên: đã login → dùng user_id từ session
+  if (req.session.user_id) {
+    return { user_id: req.session.user_id, session_key: null };
+  }
+
+  // 2. Guest: lấy session_key từ query/body → lưu vào session để dùng lại
+  let session_key = req.query.session_key || req.body.session_key;
+
+  // Nếu có truyền lên → lưu vào session nếu chưa có hoặc khác
+  if (session_key && (!req.session.session_key || req.session.session_key !== session_key)) {
+    req.session.session_key = session_key;
+  }
+
+  // Dùng cái đã lưu trong session (nếu đã có từ lần trước)
+  session_key = req.session.session_key || session_key;
+
+  return { user_id: null, session_key };
+};
 
 /* ==================== THÊM VÀO GIỎ HÀNG (user + guest) ==================== */
 const addToCart = async (req, res) => {
@@ -49,9 +64,9 @@ const addToCart = async (req, res) => {
 
     // Invalidate cache (thêm cho guest)
     const cacheKey = user_id ? `cart_count_${user_id}` : `cart_count_guest_${session_key}`;
-    await redisClient.del(cacheKey);
+    redisClient.del(cacheKey);
 
-    res.json({ status: 'success', message: 'Added to cart' });
+    res.json({ status: 'success', message: 'Added' });
   } catch (err) {
     await logError('addToCart: ' + err.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
@@ -60,52 +75,36 @@ const addToCart = async (req, res) => {
   }
 };
 
-/* ==================== LẤY GIỎ HÀNG ==================== */
+/* ==================== LẤY GIỎ HÀNG (user + guest) ==================== */
 const getCart = async (req, res) => {
   const { user_id, session_key } = getCartIdentifier(req);
 
-  // Debug log để kiểm tra identifier (xóa sau khi test)
-  console.log('getCart identifier:', { user_id, session_key, query: req.query });
-
-  if (!user_id && !session_key) {
-    return res.status(400).json({ status: 'error', message: 'Missing identifier' });
-  }
+  if (!user_id && !session_key) return res.status(400).json({ status: 'error', message: 'Missing identifier' });
 
   let conn;
   try {
     conn = await db.getConnection();
 
-    let sql, params;
+    let sql = user_id
+      ? `SELECT c.cart_id, c.quantity, p.product_id, p.name, p.price, p.discount, p.stock_quantity, pi.image_url, cat.name as category_name, b.name as brand_name
+         FROM carts c JOIN products p ON c.product_id = p.product_id 
+         LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = TRUE 
+         LEFT JOIN categories cat ON p.category_id = cat.category_id 
+         LEFT JOIN brands b ON p.brand_id = b.brand_id WHERE c.user_id = ?`
+      : `SELECT c.cart_id, c.quantity, p.product_id, p.name, p.price, p.discount, p.stock_quantity, pi.image_url, cat.name as category_name, b.name as brand_name
+         FROM carts c JOIN products p ON c.product_id = p.product_id 
+         LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = TRUE 
+         LEFT JOIN categories cat ON p.category_id = cat.category_id 
+         LEFT JOIN brands b ON p.brand_id = b.brand_id WHERE c.session_key = ?`;
 
-    if (user_id) {
-      sql = `SELECT 
-               c.cart_id, c.quantity, 
-               p.product_id, p.name, p.price, p.discount,
-               (SELECT pi.image_url 
-                FROM product_images pi 
-                WHERE pi.product_id = p.product_id AND pi.is_main = TRUE 
-                LIMIT 1) AS main_image
-             FROM carts c 
-             JOIN products p ON c.product_id = p.product_id 
-             WHERE c.user_id = ?`;
-      params = [user_id];
-    } else {
-      sql = `SELECT 
-               c.cart_id, c.quantity, 
-               p.product_id, p.name, p.price, p.discount,
-               (SELECT pi.image_url 
-                FROM product_images pi 
-                WHERE pi.product_id = p.product_id AND pi.is_main = TRUE 
-                LIMIT 1) AS main_image
-             FROM carts c 
-             JOIN products p ON c.product_id = p.product_id 
-             WHERE c.session_key = ?`;
-      params = [session_key];
-    }
+    const [cart] = await conn.query(sql, [user_id || session_key]);
 
-    const [items] = await conn.query(sql, params);
+    // Cache count (tùy chọn)
+    const count = cart.length;
+    const cacheKey = user_id ? `cart_count_${user_id}` : `cart_count_guest_${session_key}`;
+    redisClient.set(cacheKey, count, { EX: 60 });
 
-    res.json({ status: 'success', items }); // Trả về "items" để khớp với cartSlice.js
+    res.json({ status: 'success', data: cart }); // Giữ nguyên 'data' để khớp với frontend
   } catch (err) {
     console.error('getCart error:', err.message); // Log lỗi chi tiết
     await logError('getCart: ' + err.message);

@@ -30,7 +30,7 @@ const { getBrandsMana, addBrand, updateBrand, deleteBrand } = require('../contro
 
 const { addToCart, getCart, updateCart, deleteCart } = require('../controllers/cartController');
 const { getFavorites, addFavorite, deleteFavorite } = require('../controllers/favoriteController');
-const { notificationSSE, getNotifications, markNotificationsRead } = require('../controllers/notificationController');
+const { notificationSSE, getNotifications, markNotificationsRead, getNotificationCount } = require('../controllers/notificationController');
 
 const { addPost, getPosts, updatePost, deletePost, getPostImages, getComments } = require('../controllers/postController');
 const { applyPromotion, getPromotionsMana, addPromotion, updatePromotion, deletePromotion } = require('../controllers/promotionController');
@@ -75,7 +75,7 @@ router.post('/favorites', addFavorite);
 router.delete('/favorites', deleteFavorite);
 
 // ====================== NOTIFICATIONS ======================
-router.get('/notifications/sse', notificationSSE);
+router.get('/notifications/count', getNotificationCount);
 router.get('/notifications', getNotifications);
 router.post('/notifications/read', markNotificationsRead);
 

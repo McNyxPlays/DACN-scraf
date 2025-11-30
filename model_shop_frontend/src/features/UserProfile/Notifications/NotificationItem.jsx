@@ -6,11 +6,7 @@ const NotificationItem = ({ notification, onMarkAsRead }) => {
   const handleMarkAsRead = async () => {
     if (notification.read) return;
     try {
-      const response = await api.post(
-        "/notifications",
-        { action: "markSingleAsRead", notification_id: notification.id },
-        { withCredentials: true, headers: { "Content-Type": "application/json" } }
-      );
+      const response = await api.post("/notifications/read", { notification_ids: notification.id }, { withCredentials: true });
       if (response.data.success) {
         onMarkAsRead(notification.id);
         Toastify.success("Notification marked as read");

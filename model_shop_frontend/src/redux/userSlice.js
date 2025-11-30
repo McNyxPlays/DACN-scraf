@@ -77,5 +77,6 @@ const userSlice = createSlice({
   },
 });
 
+
 export const { updateUser, clearUser, resetToast } = userSlice.actions;
 export default userSlice.reducer;

@@ -43,7 +43,7 @@ app.use(session({
   name: 'sid',
   secret: process.env.SESSION_SECRET || 'change-this-secret-in-production-2025',
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
@@ -52,12 +52,11 @@ app.use(session({
   }
 }));
 
-// CSRF Token
+// TỰ ĐỘNG LƯU session_key CHO GUEST KHI CÓ TRONG QUERY (SỬA SYNTAX ĐÚNG)
 app.use((req, res, next) => {
-  if (!req.session.csrf_token) {
-    req.session.csrf_token = crypto.randomBytes(32).toString('hex');
+  if (!req.session.user_id && req.query.session_key && (!req.session.session_key || req.session.session_key !== req.query.session_key)) {
+    req.session.session_key = req.query.session_key;
   }
-  res.locals.csrfToken = req.session.csrf_token;
   next();
 });
 
@@ -72,5 +71,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ status: 'error', message: 'Something went wrong!' });
 });
+
+app.set('io', null);
 
 module.exports = app;

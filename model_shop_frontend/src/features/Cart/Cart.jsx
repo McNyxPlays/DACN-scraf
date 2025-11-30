@@ -7,6 +7,8 @@ import { Toastify } from "../../components/Toastify";
 import CartItem from "./CartItem";
 import { useSession } from "../../context/SessionContext";
 import { EXCHANGE_RATE } from "../../utils/constants";
+import Swal from "sweetalert2";
+
 function Cart({ isOpen, setIsOpen }) {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ function Cart({ isOpen, setIsOpen }) {
         ? await api.get("/cart")
         : await api.get("/cart", { params: { session_key: sessionKey } });
 
-      setCartItems(response.data.items || []);
+      setCartItems(response.data.data || []);  // SỬA: backend trả 'data' thay vì 'items'
       setError("");
     } catch (err) {
       setError("Failed to load cart");
@@ -47,47 +49,92 @@ function Cart({ isOpen, setIsOpen }) {
 
   // XÓA TẤT CẢ
   const handleClearCart = async () => {
-    if (!confirm("Clear all items in the cart?")) return;
+    const result = await Swal.fire({
+      title: "Clear Cart",
+      text: "Are you sure you want to clear all items in the cart?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Yes, clear all!",
+    });
 
-    try {
-      const payload = user?.user_id ? {} : { session_key: sessionKey };
-      await api.delete("/cart", { data: payload });
-      window.dispatchEvent(new CustomEvent("cartUpdated"));
-      Toastify.success("Đã xóa toàn bộ giỏ hàng");
-    } catch (err) {
-      Toastify.error("Xóa giỏ hàng thất bại");
+    if (result.isConfirmed) {
+      try {
+        const data = user?.user_id ? {} : { session_key: sessionKey };
+        await api.delete("/cart", { data });
+        setCartItems([]);
+        window.dispatchEvent(new CustomEvent("cartUpdated"));
+        Toastify({ type: "success", message: "Cart cleared" });
+      } catch (err) {
+        Toastify({ type: "error", message: "Failed to clear cart" });
+      }
     }
   };
 
+  // Checkout – CHO PHÉP GUEST CHECKOUT (không bắt login)
   const handleCheckout = () => {
     setIsOpen(false);
     navigate("/checkout");
   };
 
-  const subtotal = cartItems.reduce((sum, item) => {
-    const price = item.discount > 0 ? item.price * (1 - item.discount / 100) : item.price;
-    return sum + price * item.quantity;
-  }, 0) * EXCHANGE_RATE;
+  // Tổng tiền
+  const subtotal = cartItems.reduce(
+    (total, item) => total + item.price * item.quantity * EXCHANGE_RATE,
+    0
+  );
 
-  if (!isOpen) return null;
+  // Đóng cart khi click ngoài
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (cartRef.current && !cartRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.body.style.overflow = "hidden";
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
-      <div ref={cartRef} className="bg-white w-full max-w-md h-full overflow-y-auto flex flex-col">
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden transition-opacity duration-300 ${
+        isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
+    >
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* Cart Modal */}
+      <div
+        ref={cartRef}
+        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl transform transition-transform duration-300 ${
+          isOpen ? "translate-x-0" : "translate-x-full"
+        } flex flex-col`}
+      >
         {/* Header */}
-        <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
-          <h2 className="text-xl font-bold">Cart ({cartItems.length})</h2>
-          <button onClick={() => setIsOpen(false)} className="text-2xl">&times;</button>
+        <div className="p-6 border-b flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Your Cart</h2>
+          <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-700">
+            <i className="ri-close-line ri-xl"></i>
+          </button>
         </div>
 
-        {/* Body */}
+        {/* Body - Danh sách items */}
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
-            <div className="text-center py-12">Loading...</div>
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
           ) : error ? (
-            <p className="text-red-500 text-center">{error}</p>
+            <div className="text-center text-red-600">{error}</div>
           ) : cartItems.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center text-gray-500 py-12">
               <i className="ri-shopping-cart-2-line text-6xl mb-4 block"></i>
               <p>Your cart is empty</p>
             </div>

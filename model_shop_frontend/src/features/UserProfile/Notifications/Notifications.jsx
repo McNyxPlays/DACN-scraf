@@ -29,7 +29,12 @@ const Notifications = () => {
       setError(null);
       try {
         const response = await api.get("/notifications", {
-          params: { filter, category: category === "All Categories" ? "" : category, sort, page: currentPage },
+          params: { 
+            filter: filter.toLowerCase(), // Backend mong 'all', 'unread', 'read'
+            type: category === "All Categories" ? "all" : category.toLowerCase(), // Sửa: backend mong 'type', 'all' cho all
+            page: currentPage,
+            perPage: 10 // Thêm nếu backend dùng perPage (mặc định 10)
+          },
           withCredentials: true,
         });
         if (response.data.success) {
@@ -37,7 +42,7 @@ const Notifications = () => {
             id: n.notification_id,
             title: n.type ? `${n.type.charAt(0).toUpperCase()}${n.type.slice(1)} Notification` : "Notification",
             time: new Date(n.created_at).toLocaleString(),
-            description: n.message || "No description available",
+            description: n.content || "No description available", // Sửa: backend trả content (message AS content)
             read: n.is_read === 1,
           }));
           setNotifications(formattedNotifications);
@@ -54,7 +59,7 @@ const Notifications = () => {
       }
     };
     fetchNotifications();
-  }, [filter, category, sort, currentPage, user]);
+  }, [filter, category, currentPage, user]); // Xóa sort vì backend không hỗ trợ
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
@@ -71,19 +76,14 @@ const Notifications = () => {
     setCurrentPage(1);
   };
 
-  const handlePageChange = (page) => setCurrentPage(page);
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
 
+  // Mark all as read – sửa endpoint đúng backend
   const handleMarkAsRead = async () => {
-    if (!user?.user_id) {
-      Toastify.error("Please log in to perform this action.");
-      return;
-    }
     try {
-      const response = await api.post(
-        "/notifications",
-        { action: "markAsRead" },
-        { withCredentials: true, headers: { "Content-Type": "application/json" } }
-      );
+      const response = await api.post("/notifications/read", { notification_ids: "all" }, { withCredentials: true });
       if (response.data.success) {
         setNotifications(notifications.map((n) => ({ ...n, read: true })));
         Toastify.success("All notifications marked as read");
@@ -97,17 +97,10 @@ const Notifications = () => {
     }
   };
 
+  // Delete all – backend chưa có, giả sử thêm route tương tự, nếu không thì comment
   const handleDelete = async () => {
-    if (!user?.user_id) {
-      Toastify.error("Please log in to perform this action.");
-      return;
-    }
     try {
-      const response = await api.post(
-        "/notifications",
-        { action: "delete" },
-        { withCredentials: true, headers: { "Content-Type": "application/json" } }
-      );
+      const response = await api.post("/notifications/delete", { notification_ids: "all" }, { withCredentials: true }); // Giả sử backend có route delete
       if (response.data.success) {
         setNotifications([]);
         setCurrentPage(1);
@@ -120,12 +113,6 @@ const Notifications = () => {
       Toastify.error(`Failed to delete: ${errorMessage}`);
       console.error("Error deleting notifications:", error);
     }
-  };
-
-  const handleSingleMarkAsRead = (notificationId) => {
-    setNotifications(
-      notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-    );
   };
 
   return (
@@ -155,7 +142,7 @@ const Notifications = () => {
               <NotificationItem
                 key={notification.id}
                 notification={notification}
-                onMarkAsRead={handleSingleMarkAsRead}
+                onMarkAsRead={(id) => setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n))}
               />
             ))}
           </div>

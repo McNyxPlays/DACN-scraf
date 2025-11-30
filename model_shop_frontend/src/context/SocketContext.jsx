@@ -1,47 +1,40 @@
-// model_shop_frontend/src/context/SocketContext.jsx
+// src/context/SocketContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+import io from 'socket.io-client';
 
-const SocketContext = createContext(null); // Mặc định null để tránh undefined
+const SocketContext = createContext();
+
+export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    // Sử dụng '/' để Vite proxy tự động xử lý /socket.io
-    const socketUrl = import.meta.env.DEV ? '/' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000');
-
-    const newSocket = io(socketUrl, {
+    const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
       withCredentials: true,
       transports: ['websocket'],
       reconnection: true,
-      reconnectionAttempts: 10, // Tăng retry
-      reconnectionDelay: 2000, // Delay 2s
-      reconnectionDelayMax: 5000,
-      randomizationFactor: 0.5,
+      reconnectionAttempts: 5,
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket.IO connected:', newSocket.id);
-      setSocket(newSocket);
+      console.log('Socket.IO Connected:', newSocket.id);
     });
 
-    newSocket.on('connect_error', (err) => {
-      console.warn('Socket.IO connect_error:', err.message);
-      setSocket(null); // Reset nếu fail
+    newSocket.on('disconnect', () => {
+      console.log('Socket.IO Disconnected');
     });
 
-    newSocket.on('disconnect', (reason) => {
-      console.log('Socket.IO disconnected:', reason);
-      setSocket(null);
-    });
+    setSocket(newSocket);
 
     return () => {
       newSocket.close();
     };
   }, []);
 
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
+  return (
+    <SocketContext.Provider value={socket}>
+      {children}
+    </SocketContext.Provider>
+  );
 };
-
-export const useSocket = () => useContext(SocketContext); // Trả về null nếu chưa connect

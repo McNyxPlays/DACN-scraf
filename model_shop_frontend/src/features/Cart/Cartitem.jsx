@@ -5,6 +5,7 @@ import api from "../../api/index";
 import { useSelector } from "react-redux";
 import { useSession } from "../../context/SessionContext";
 import { Toastify } from "../../components/Toastify";
+import Swal from "sweetalert2";
 
 function CartItem({ item, exchangeRate, onUpdate }) {
   const user = useSelector((state) => state.user.user);
@@ -14,7 +15,7 @@ function CartItem({ item, exchangeRate, onUpdate }) {
     ? item.price * (1 - item.discount / 100)
     : item.price;
 
-  const displayPrice = priceAfterDiscount * exchangeRate; // Giá cố định mỗi sản phẩm
+  const displayPrice = priceAfterDiscount * exchangeRate;
 
   const handleQuantityChange = async (newQty) => {
     if (newQty < 1) return;
@@ -25,24 +26,35 @@ function CartItem({ item, exchangeRate, onUpdate }) {
 
       await api.put("/cart", data);
       onUpdate?.();
-      // Không hiện Toast "Cart updated!" nữa → UX sạch hơn
     } catch (err) {
-      Toastify.error("Update the number of failures");
+      Toastify.error("Update quantity failed");
     }
   };
 
+  // Thay confirm bằng SweetAlert2
   const handleRemove = async () => {
-    if (!confirm("Delete this product from the cart?")) return;
+    const result = await Swal.fire({
+      title: "Remove Item",
+      text: "Are you sure you want to remove this product from the cart?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Yes, remove it!",
+      cancelButtonText: "Cancel",
+    });
 
-    try {
-      const data = { cart_id: item.cart_id };
-      if (!user?.user_id) data.session_key = sessionKey;
+    if (result.isConfirmed) {
+      try {
+        const data = { cart_id: item.cart_id };
+        if (!user?.user_id) data.session_key = sessionKey;
 
-      await api.delete("/cart", { data });
-      onUpdate?.();
-      Toastify.success("Product deleted");
-    } catch (err) {
-      Toastify.error("Delete failed");
+        await api.delete("/cart", { data });
+        onUpdate?.();
+        Toastify.success("Product removed");
+      } catch (err) {
+        Toastify.error("Remove failed");
+      }
     }
   };
 
@@ -61,7 +73,6 @@ function CartItem({ item, exchangeRate, onUpdate }) {
           {item.name}
         </h3>
 
-        {/* Giá cố định (không nhân quantity) */}
         <div className="mt-1">
           {item.discount > 0 && (
             <p className="text-xs text-gray-500 line-through">
@@ -79,7 +90,6 @@ function CartItem({ item, exchangeRate, onUpdate }) {
       </div>
 
       <div className="flex flex-col justify-between items-end">
-        {/* Nút + - */}
         <div className="flex items-center gap-2 bg-gray-100 rounded-full">
           <button
             onClick={() => handleQuantityChange(item.quantity - 1)}
@@ -99,7 +109,6 @@ function CartItem({ item, exchangeRate, onUpdate }) {
           </button>
         </div>
 
-        {/* Nút xóa */}
         <button
           onClick={handleRemove}
           className="text-xs text-red-600 hover:text-red-700 mt-3"

@@ -12,7 +12,7 @@ export const fetchCartCount = createAsyncThunk(
       } else {
         response = await api.get('/cart', { params: { session_key: sessionKey } });
       }
-      return response.data.data?.length || 0;
+      return response.data.data?.length || 0;  // Giữ nguyên, khớp với backend 'data'
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || 'Fetch cart failed');
     }

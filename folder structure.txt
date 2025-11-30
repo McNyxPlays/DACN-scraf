@@ -7,47 +7,48 @@ model_shop_backend/
 │   │       redis.js  
 │   │
 │   ├───controllers/             
-│   │       authController.js      
-│   │       userController.js        
-│   │       productController.js    
-│   │       categoryController.js    
-│   │       brandController.js       
-│   │       cartController.js        
-│   │       favoriteController.js    
-│   │       postController.js        
-│   │       notificationController.js
+│   │       authController.js    
+│   │       brandController.js   
+│   │       cartController.js   
+│   │       categoryController.js  
+│   │       countController.js  
+│   │       favoriteController.js   
+│   │       notificationController.js   
+│   │       orderController.js   
+│   │       postController.js 
+│   │       productController.js          
 │   │       promotionController.js  
-│   │       countController.js   
-│   │       orderController.js
-│   │
-│   ├───routes/
-│   │       api.js
-│   │
-│   ├───models/                 
-│   │       userModel.js
-│   │       productModel.js
-│   │       postModel.js
-│   │       cartModel.js
-│   │       favoriteModel.js
-│   │       categoryModel.js
-│   │       brandModel.js
-│   │       notificationModel.js
-│   │       promotionModel.js
-│   │       socialLinkModel.js
-│   │
-│   ├───middleware/
-│   │
-│   ├───uploads/                 
-│   │   ├───avatars/
-│   │   ├───posts/
+│   │       userController.js  
 │   │
 │   ├───logs/
 │   │       error.log
 │   │
+│   ├───models/      
+│   │       brandModel.js      
+│   │       cartModel.js     
+│   │       categoryModel.js
+│   │       favoriteModel.js
+│   │       notificationModel.js
+│   │       postModel.js
+│   │       productModel.js
+│   │       promotionModel.js
+│   │       userModel.js
+│   │
+│   ├───routes/
+│   │       api.js
+│   │
+│   ├───socket/
+│   │       notificationHandler.js
+│   │
+│   ├───uploads/                 
+│   │     ├───avatars/
+│   │     ├───posts/
+│   │
+│   │
 │   │
 │   ├───utils/
-│   │     
-│   │       
+│   │      emitNotification.js
+│   │      sendGlobalNotification.js
 │   │      
 │   │
 │   ├───app.js                 
