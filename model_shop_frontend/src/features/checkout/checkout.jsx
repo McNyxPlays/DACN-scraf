@@ -111,6 +111,10 @@ export default function Checkout() {
     return Toastify.error("Please enter full name and shipping address");
   }
 
+  if (!guestEmail.includes('@') && !user?.email) {
+  return Toastify.error("Please enter a valid email to receive the invoice");
+  }
+
   try {
     const response = await api.post("/orders", {
       csrf_token: csrfToken,

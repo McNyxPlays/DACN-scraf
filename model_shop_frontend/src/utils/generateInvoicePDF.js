@@ -146,14 +146,6 @@ const generateInvoicePDF = async (order, options = {}) => {
 
 
   // Footer
-  doc.setTextColor(100);
-  doc.setFontSize(10);
-  doc.setFont("Roboto", "normal");
-  doc.text("Người mua hàng", 40, finalY + 100);
-  doc.text("Người bán hàng", 140, finalY + 100);
-  doc.text("(Ký, ghi rõ họ tên)", 40, finalY + 106);
-  doc.text("(Ký, ghi rõ họ tên)", 140, finalY + 106);
-
   doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text("Xin chân thành cảm ơn Quý khách!", pageWidth / 2, pageHeight - 22, { align: "center" });

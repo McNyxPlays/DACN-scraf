@@ -45,13 +45,15 @@ model_shop_backend/
 │   │     ├───posts/
 │   │
 │   │
-│   │
 │   ├───utils/
 │   │      emitNotification.js
+│   │      formatCurrency.js
+│   │      invoiceGenerator.js
 │   │      sendGlobalNotification.js
-│   │      
-│   │
-│   ├───app.js                 
+│   │      sendInvoiceEmail.js
+│   │      socket.js
+│   │    
+│   ├───app.js             
 │   └───server.js              
 
 

@@ -74,4 +74,18 @@ app.use((err, req, res, next) => {
 
 app.set('io', null);
 
+
+const testToken = async () => {
+  try {
+    const oauth2Client = new google.auth.OAuth2(/*...*/);
+    oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+    await oauth2Client.getAccessToken();
+    console.log(' Gmail token OK');
+  } catch (err) {
+    console.error(' Gmail token invalid:', err.message);
+  }
+};
+testToken();
+
+
 module.exports = app;
