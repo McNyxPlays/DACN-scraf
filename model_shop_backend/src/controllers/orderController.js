@@ -6,7 +6,6 @@ const fs = require('fs');
 const path = require('path');
 
 // Import utils
-const { formatCurrency } = require('../utils/formatCurrency');
 const { generateInvoicePDFBuffer } = require('../utils/invoiceGenerator');
 const { sendInvoiceEmail } = require('../utils/sendInvoiceEmail');
 
@@ -163,29 +162,64 @@ const createOrder = async (req, res) => {
       status: 'pending'
     };
 
-    // Chạy bất đồng bộ (không làm chậm response)
-    (async () => {
-      try {
-        const pdfBuffer = await generateInvoicePDFBuffer(fullOrderData, processedItems.map(i => ({
-          name: i.name,
-          quantity: i.quantity,
-          price_at_purchase: i.price_at_purchase
-        })));
+(async () => {
+  try {
+    // LẤY LẠI ĐƠN HÀNG ĐỂ CÓ EMAIL CHÍNH XÁC (từ user hoặc guest)
+    const [orderRows] = await conn.query(
+      `SELECT o.*, u.email as user_email 
+       FROM orders o 
+       LEFT JOIN users u ON o.user_id = u.user_id 
+       WHERE o.order_id = ?`,
+      [order_id]
+    );
 
-        // Lưu file PDF
-        const invoiceDir = path.resolve('./uploads/invoices');
-        if (!fs.existsSync(invoiceDir)) fs.mkdirSync(invoiceDir, { recursive: true });
-        fs.writeFileSync(`${invoiceDir}/HOADON_${order_code}.pdf`, pdfBuffer);
+    if (!orderRows || orderRows.length === 0) {
+      console.error('Không tìm thấy đơn hàng sau khi tạo:', order_id);
+      return;
+    }
 
-        // Gửi email nếu có
-        if (guest_email && guest_email.includes('@')) {
-          await sendInvoiceEmail(guest_email, fullOrderData, pdfBuffer);
-        }
-      } catch (err) {
-        console.error('Lỗi tạo/gửi hóa đơn:', err);
-        await logError('Invoice error for order ' + order_code + ': ' + err.message);
-      }
-    })();
+    const currentOrder = orderRows[0];
+    const customerEmail = currentOrder.email || currentOrder.user_email;
+
+    // Tạo PDF
+    const pdfBuffer = await generateInvoicePDFBuffer({
+      ...fullOrderData,
+      full_name: currentOrder.full_name,
+      shipping_address: currentOrder.shipping_address,
+      phone_number: currentOrder.phone_number,
+      email: customerEmail,
+      order_code: currentOrder.order_code,
+      created_at: currentOrder.created_at
+    }, processedItems.map(i => ({
+      name: i.name,
+      quantity: i.quantity,
+      price_at_purchase: i.price_at_purchase
+    })));
+
+    // Lưu file PDF
+    const invoiceDir = path.resolve('./src/uploads/invoices');
+    if (!fs.existsSync(invoiceDir)) fs.mkdirSync(invoiceDir, { recursive: true });
+    const pdfFilename = `HOADON_${currentOrder.order_code}.pdf`;
+    fs.writeFileSync(path.join(invoiceDir, pdfFilename), pdfBuffer);
+
+    // GỬI EMAIL NẾU CÓ EMAIL HỢP LỆ
+    if (customerEmail && customerEmail.includes('@') && customerEmail.trim() !== '') {
+      await sendInvoiceEmail(customerEmail.trim(), {
+        ...currentOrder,
+        order_code: currentOrder.order_code,
+        final_amount: currentOrder.final_amount,
+        created_at: currentOrder.created_at
+      }, pdfBuffer);
+      
+      console.log(`Đã gửi hóa đơn đến: ${customerEmail}`);
+    } else {
+      console.log(`Không gửi email - Không có email hợp lệ cho đơn ${currentOrder.order_code}`);
+    }
+  } catch (err) {
+    console.error('Lỗi tạo/gửi hóa đơn:', err);
+    await logError('Invoice error for order ' + order_code + ': ' + err.message);
+  }
+})();
 
     // Trả về ngay cho frontend
     return res.json({

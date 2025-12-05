@@ -1,7 +1,10 @@
-CREATE DATABASE IF NOT EXISTS model_shop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS model_shop 
+CHARACTER SET utf8mb4 
+COLLATE utf8mb4_unicode_ci;
+
 USE model_shop;
 
--- Bảng 1: users (giữ nguyên + thêm 2 cột ảnh)
+-- ========================== 1. USERS ==========================
 CREATE TABLE IF NOT EXISTS users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -10,16 +13,18 @@ CREATE TABLE IF NOT EXISTS users (
     address TEXT,
     role ENUM('user', 'support', 'admin', 'customizer') DEFAULT 'user',
     full_name VARCHAR(255),
-    profile_image VARCHAR(255) NULL,
-    banner_image VARCHAR(255) NULL,     
+    profile_image VARCHAR(255) NULL DEFAULT NULL,
+    banner_image VARCHAR(255) NULL DEFAULT NULL,
     gender VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 2: categories
+-- ========================== 2. CATEGORIES ==========================
 CREATE TABLE IF NOT EXISTS categories (
     category_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -28,7 +33,7 @@ CREATE TABLE IF NOT EXISTS categories (
     INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 3: brands
+-- ========================== 3. BRANDS ==========================
 CREATE TABLE IF NOT EXISTS brands (
     brand_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
@@ -37,17 +42,16 @@ CREATE TABLE IF NOT EXISTS brands (
     INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 4: products
-DROP TABLE IF EXISTS products;
-CREATE TABLE products (
+-- ========================== 4. PRODUCTS ==========================
+CREATE TABLE IF NOT EXISTS products (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     category_id INT,
     brand_id INT,
     user_id INT,
     name VARCHAR(255) NOT NULL,
-    price DECIMAL(12,2) NOT NULL,
-    stock_quantity INT NOT NULL DEFAULT 0,
-    discount DECIMAL(10,2) DEFAULT 0.00,
+    price DECIMAL(12,2) NOT NULL CHECK (price >= 0),
+    stock_quantity INT NOT NULL DEFAULT 0 CHECK (stock_quantity >= 0),
+    discount DECIMAL(5,2) DEFAULT 0.00 CHECK (discount BETWEEN 0 AND 100),
     description TEXT,
     is_new BOOLEAN DEFAULT TRUE,
     is_used BOOLEAN DEFAULT FALSE,
@@ -56,6 +60,7 @@ CREATE TABLE products (
     is_available BOOLEAN DEFAULT TRUE,
     is_on_sale BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE SET NULL,
     FOREIGN KEY (brand_id) REFERENCES brands(brand_id) ON DELETE SET NULL,
@@ -66,26 +71,30 @@ CREATE TABLE products (
     INDEX idx_user_id (user_id),
     INDEX idx_name (name),
     INDEX idx_price (price),
-    FULLTEXT idx_name_fulltext (name, description)
+    INDEX idx_available (is_available),
+    INDEX idx_hot_sale (is_hot, is_on_sale, is_available),
+    FULLTEXT INDEX ft_name_description (name, description)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 5: product_images 
+-- ========================== 5. PRODUCT IMAGES ==========================
 CREATE TABLE IF NOT EXISTS product_images (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     image_url VARCHAR(500) NOT NULL,
     is_main BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
-    INDEX idx_product_id (product_id)
+    INDEX idx_product_id (product_id),
+    INDEX idx_main_product (product_id, is_main)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 6: carts (giữ nguyên hoàn toàn)
+-- ========================== 6. CARTS ==========================
 CREATE TABLE IF NOT EXISTS carts (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
     session_key VARCHAR(255) NULL,
     product_id INT NOT NULL,
-    quantity INT NOT NULL DEFAULT 1,
+    quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_user_product (user_id, product_id),
@@ -97,7 +106,7 @@ CREATE TABLE IF NOT EXISTS carts (
     FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 7: stores
+-- ========================== 7. STORES ==========================
 CREATE TABLE IF NOT EXISTS stores (
     store_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -106,35 +115,29 @@ CREATE TABLE IF NOT EXISTS stores (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_name (name),
-    INDEX idx_is_active (is_active)
+    INDEX idx_active (is_active)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 8: orders (gộp transactions vào đây)
+-- ========================== 8. ORDERS ==========================
 CREATE TABLE IF NOT EXISTS orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NULL, 
-    
+    user_id INT NULL,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NULL,
     phone_number VARCHAR(20) NULL,
     shipping_address TEXT NOT NULL,
-    
     total_amount DECIMAL(12,2) NOT NULL,
     discount_amount DECIMAL(12,2) DEFAULT 0.00,
     shipping_cost DECIMAL(12,2) DEFAULT 0.00,
-    final_amount DECIMAL(12,2) NOT NULL, 
-    
+    final_amount DECIMAL(12,2) NOT NULL,
     order_code VARCHAR(50) UNIQUE NOT NULL,
     status ENUM('pending','processing','shipped','delivered','cancelled','refunded') DEFAULT 'pending',
     payment_status ENUM('pending','paid','failed','refunded') DEFAULT 'pending',
     payment_method ENUM('cod','bank_transfer','momo','vnpay','zalopay','paypal') DEFAULT 'cod',
-    
     shipping_method ENUM('standard','fast','express','store_pickup') DEFAULT 'standard',
     store_id INT NULL,
-    
-    paid_at TIMESTAMP NULL,
+    paid_at TIMESTAMP NULL DEFAULT NULL,
     external_transaction_id VARCHAR(255) NULL,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -145,15 +148,16 @@ CREATE TABLE IF NOT EXISTS orders (
     INDEX idx_order_code (order_code),
     INDEX idx_status (status),
     INDEX idx_payment_status (payment_status),
-    INDEX idx_created_at (created_at)
+    INDEX idx_status_payment (status, payment_status),
+    INDEX idx_created_at (created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 9: order_details
+-- ========================== 9. ORDER DETAILS ==========================
 CREATE TABLE IF NOT EXISTS order_details (
     detail_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     product_id INT NOT NULL,
-    quantity INT NOT NULL,
+    quantity INT NOT NULL CHECK (quantity > 0),
     price_at_purchase DECIMAL(12,2) NOT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
@@ -161,7 +165,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     INDEX idx_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 10: posts (giữ nguyên, bỏ post_time_status thừa)
+-- ========================== 10. POSTS & IMAGES ==========================
 CREATE TABLE IF NOT EXISTS posts (
     post_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -173,7 +177,6 @@ CREATE TABLE IF NOT EXISTS posts (
     INDEX idx_created (created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 11: post_images (giữ nguyên)
 CREATE TABLE IF NOT EXISTS post_images (
     image_id INT AUTO_INCREMENT PRIMARY KEY,
     post_id INT NOT NULL,
@@ -182,7 +185,7 @@ CREATE TABLE IF NOT EXISTS post_images (
     INDEX idx_post_id (post_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 12: comments
+-- ========================== 11. COMMENTS ==========================
 CREATE TABLE IF NOT EXISTS comments (
     comment_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -198,7 +201,7 @@ CREATE TABLE IF NOT EXISTS comments (
     INDEX idx_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 13: user_saved_items
+-- ========================== 12. SAVED ITEMS ==========================
 CREATE TABLE IF NOT EXISTS user_saved_items (
     saved_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -213,32 +216,44 @@ CREATE TABLE IF NOT EXISTS user_saved_items (
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 14: notifications
+-- ========================== 13. NOTIFICATIONS ==========================
 CREATE TABLE IF NOT EXISTS notifications (
-    notification_id   INT AUTO_INCREMENT PRIMARY KEY,
-    user_id           INT NULL,
-    session_key       VARCHAR(255) NULL,
-    message           VARCHAR(1000) NOT NULL,
-    link              VARCHAR(500) NULL,
-    data              JSON NULL,
-    type              ENUM('order','system','custom','message','social','shopping','events','account') DEFAULT 'system',
-    is_global         TINYINT(1) DEFAULT 0,
-    is_read           TINYINT(1) DEFAULT 0,
-    read_at           TIMESTAMP NULL DEFAULT NULL,
-    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_user_id           (user_id),
-    INDEX idx_session_key       (session_key),
-    INDEX idx_global            (is_global),
-    INDEX idx_type              (type),
-    INDEX idx_is_read           (is_read),
-    INDEX idx_created_at        (created_at DESC),
-    INDEX idx_global_created    (is_global, created_at DESC),
-    INDEX idx_user_or_session   (user_id, session_key),
-    CONSTRAINT fk_notifications_user
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+    notification_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    session_key VARCHAR(255) NULL,
+    message VARCHAR(1000) NOT NULL,
+    link VARCHAR(500) NULL,
+    data JSON NULL,
+    type ENUM('order','system','custom','message','social','shopping','events','account') DEFAULT 'system',
+    is_global TINYINT(1) DEFAULT 0,
+    is_read TINYINT(1) DEFAULT 0,
+    read_at TIMESTAMP NULL DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_session_key (session_key),
+    INDEX idx_global (is_global),
+    INDEX idx_type (type),
+    INDEX idx_is_read (is_read),
+    INDEX idx_created_at (created_at DESC),
+    INDEX idx_user_read (user_id, is_read, created_at DESC),
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 15: messages (giữ nguyên cấu trúc cũ)
+-- ========================== 14. MESSAGES & CONVERSATIONS ==========================
+CREATE TABLE IF NOT EXISTS conversations (
+    conversation_id INT AUTO_INCREMENT PRIMARY KEY,
+    user1_id INT NOT NULL,
+    user2_id INT NOT NULL,
+    last_message_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user1_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (user2_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (last_message_id) REFERENCES messages(message_id) ON DELETE SET NULL,
+    UNIQUE KEY uniq_conversation (user1_id, user2_id),
+    INDEX idx_user1 (user1_id),
+    INDEX idx_user2 (user2_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS messages (
     message_id INT AUTO_INCREMENT PRIMARY KEY,
     sender_id INT NOT NULL,
@@ -247,31 +262,18 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     is_read BOOLEAN DEFAULT FALSE,
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_by INT DEFAULT NULL,
+    deleted_by INT NULL DEFAULT NULL,
     FOREIGN KEY (sender_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (receiver_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE,
     FOREIGN KEY (deleted_by) REFERENCES users(user_id) ON DELETE SET NULL,
-    INDEX idx_sender_id (sender_id),
-    INDEX idx_receiver_id (receiver_id),
-    INDEX idx_conversation_id (conversation_id)
+    INDEX idx_sender (sender_id),
+    INDEX idx_receiver (receiver_id),
+    INDEX idx_conversation (conversation_id),
+    INDEX idx_sent_at (sent_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 16: conversations (giữ nguyên + thêm trigger chuẩn hóa user1/user2)
-CREATE TABLE IF NOT EXISTS conversations (
-    conversation_id INT AUTO_INCREMENT PRIMARY KEY,
-    user1_id INT NOT NULL,
-    user2_id INT NOT NULL,
-    last_message_id INT DEFAULT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user1_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (user2_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (last_message_id) REFERENCES messages(message_id) ON DELETE SET NULL,
-    UNIQUE KEY uniq_conversation (user1_id, user2_id),
-    INDEX idx_user1_id (user1_id),
-    INDEX idx_user2_id (user2_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Trigger chuẩn hóa user1_id < user2_id (tương thích MariaDB 10.4)
+-- Trigger chuẩn hóa user1_id < user2_id (an toàn mọi version)
 DROP TRIGGER IF EXISTS trg_normalize_conversation;
 DELIMITER $$
 CREATE TRIGGER trg_normalize_conversation
@@ -279,28 +281,14 @@ BEFORE INSERT ON conversations
 FOR EACH ROW
 BEGIN
     IF NEW.user1_id > NEW.user2_id THEN
-        SET @temp = NEW.user1_id;
-        SET NEW.user1_id = NEW.user2_id;
-        SET NEW.user2_id = @temp;
+        SET NEW.user1_id = NEW.user1_id + NEW.user2_id;
+        SET NEW.user2_id = NEW.user1_id - NEW.user2_id;
+        SET NEW.user1_id = NEW.user1_id - NEW.user2_id;
     END IF;
 END$$
 DELIMITER ;
 
--- Thêm FK cho messages → conversations (an toàn khi chạy lại)
-DELIMITER $$
-CREATE PROCEDURE add_fk_conversation()
-BEGIN
-    IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-                   WHERE TABLE_NAME = 'messages' AND CONSTRAINT_NAME = 'fk_messages_conversation_id') THEN
-        ALTER TABLE messages ADD CONSTRAINT fk_messages_conversation_id
-        FOREIGN KEY (conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE;
-    END IF;
-END$$
-DELIMITER ;
-CALL add_fk_conversation();
-DROP PROCEDURE add_fk_conversation;
-
--- Bảng 17: promotions
+-- ========================== 15. PROMOTIONS ==========================
 CREATE TABLE IF NOT EXISTS promotions (
     promotion_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
@@ -311,11 +299,11 @@ CREATE TABLE IF NOT EXISTS promotions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status ENUM('active','inactive','expired') DEFAULT 'active',
     usage_count INT DEFAULT 0,
-    max_usage INT DEFAULT NULL,
-    INDEX idx_code (code)
+    max_usage INT NULL DEFAULT NULL,
+    INDEX idx_code (code),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 18: order_promotions
 CREATE TABLE IF NOT EXISTS order_promotions (
     order_promotion_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
@@ -326,7 +314,7 @@ CREATE TABLE IF NOT EXISTS order_promotions (
     FOREIGN KEY (promotion_id) REFERENCES promotions(promotion_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 19: follows
+-- ========================== 16. SOCIAL: FOLLOWS & LIKES ==========================
 CREATE TABLE IF NOT EXISTS follows (
     follow_id INT AUTO_INCREMENT PRIMARY KEY,
     follower_id INT NOT NULL,
@@ -337,7 +325,6 @@ CREATE TABLE IF NOT EXISTS follows (
     UNIQUE KEY uniq_follow (follower_id, following_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Bảng 20: likes
 CREATE TABLE IF NOT EXISTS likes (
     like_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,

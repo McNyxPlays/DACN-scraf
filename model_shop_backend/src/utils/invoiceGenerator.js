@@ -7,15 +7,21 @@ const QRCode = require('qrcode');
 
 const __dirname = path.dirname(__filename);
 
-// Load font
-const robotoRegular = fs.readFileSync(path.resolve(__dirname, '../../public/fonts/Roboto-Regular.ttf'));
-const robotoBold = fs.readFileSync(path.resolve(__dirname, '../../public/fonts/Roboto-Bold.ttf'));
+let robotoRegular, robotoBold;
+try {
+  robotoRegular = fs.readFileSync(path.resolve(__dirname, '../../public/fonts/Roboto-Regular.ttf'));
+  robotoBold = fs.readFileSync(path.resolve(__dirname, '../../public/fonts/Roboto-Bold.ttf'));
+} catch (err) {
+  console.error('KHÔNG TÌM THẤY FONT ROBOTO!');
+  process.exit(1);
+}
 
 const toBase64 = (buffer) => buffer.toString('base64');
 
-const formatCurrency = (amount) => {
-  if (!amount) return '0 ₫';
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+// Format đúng cho VND (không nhân 25.000 nữa)
+const formatCurrency = (amount = 0) => {
+  const vnd = Math.round(Number(amount));
+  return vnd === 0 ? 'Miễn phí' : `₫${vnd.toLocaleString('vi-VN')}`;
 };
 
 const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
@@ -30,10 +36,9 @@ const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  const qrData = `https://scmodel.vn/order/${order.order_code}`;
+  const qrData = `https://scmodel.vn/order/${order.order_code || 'unknown'}`;
   const qrCodeDataUrl = await QRCode.toDataURL(qrData, { width: 512, margin: 1 });
 
-  // Viền + Logo
   doc.setDrawColor(0);
   doc.setLineWidth(1.5);
   doc.rect(8, 8, pageWidth - 16, pageHeight - 16);
@@ -46,23 +51,22 @@ const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
     }
   } catch (e) {}
 
-  // Header
   doc.setFont('Roboto', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(20);
   doc.text('SC MODEL SHOP', 54, 22);
+
   doc.setFontSize(10);
   doc.setFont('Roboto', 'normal');
-  doc.setTextColor(80);
+  doc.setTextColor(100);
   doc.text('Địa chỉ: 123 Đường ABC, TP. Hồ Chí Minh', 54, 30);
   doc.text('Hotline: 090xxxxxxx | Email: contact@scmodel.vn', 54, 36);
   doc.text('Website: scmodel.vn | MST: 0123456789', 54, 42);
 
-  doc.setFontSize(22);
+  doc.setFontSize(24);
   doc.setFont('Roboto', 'bold');
   doc.setTextColor(0);
   doc.text('HÓA ĐƠN MUA HÀNG', pageWidth / 2, 65, { align: 'center' });
 
-  // Thông tin khách
   let y = 85;
   doc.setFont('Roboto', 'bold');
   doc.setFontSize(11);
@@ -79,7 +83,6 @@ const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
   doc.text(order.order_code || 'N/A', 68, y + 24);
   doc.text(new Date(order.created_at || Date.now()).toLocaleDateString('vi-VN'), 68, y + 32);
 
-  // Bảng sản phẩm – ĐÃ FIX WIDTH + WRAP TEXT + LẤY finalY ĐÚNG
   const rows = orderDetails.map((item, i) => [
     (i + 1).toString(),
     item.product_name || item.name || 'Sản phẩm',
@@ -94,17 +97,10 @@ const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [255,255,255], textColor: 0, fontStyle: 'bold', fontSize: 11 },
-    styles: { 
-      font: 'Roboto', 
-      fontSize: 9,
-      cellPadding: 3,
-      overflow: 'linebreak',
-      halign: 'left',
-      valign: 'middle'
-    },
+    styles: { font: 'Roboto', fontSize: 9, cellPadding: 3, overflow: 'linebreak', valign: 'middle' },
     columnStyles: {
       0: { cellWidth: 12, halign: 'center' },
-      1: { cellWidth: 68 },  // ← Giảm để fit
+      1: { cellWidth: 80 },
       2: { cellWidth: 15, halign: 'center' },
       3: { cellWidth: 35, halign: 'right' },
       4: { cellWidth: 40, halign: 'right' },
@@ -112,41 +108,33 @@ const generateInvoicePDFBuffer = async (order, orderDetails = []) => {
     margin: { left: 10, right: 10 }
   });
 
-  // ← FIX: LẤY finalY ĐÚNG SAU KHI DÙNG autoTable(doc, ...)
-  const finalY = doc.lastAutoTable.finalY + 15;
+  const finalY = doc.lastAutoTable.finalY + 18;
 
-  // Tính tiền
-  const totalAmount = order.final_amount || order.total_amount || 0;
-  const discount = order.discount_amount || 0;
-  const shipping = order.shipping_cost || 0;
+  const totalAmount = Number(order.final_amount) || 0;
+  const discount = Number(order.discount_amount) || 0;
+  const shipping = Number(order.shipping_cost) || 0;
   const subtotal = totalAmount - shipping + discount;
-
-  const f = (amount) => `₫${Math.round(amount).toLocaleString('vi-VN')}`;
 
   doc.setFont('Roboto', 'bold');
   doc.setFontSize(12);
   doc.text('Cộng tiền hàng:', 115, finalY);
-  doc.text(f(subtotal), 195, finalY, { align: 'right' });
+  doc.text(formatCurrency(subtotal), 195, finalY, { align: 'right' });
 
   doc.text('Phí vận chuyển:', 115, finalY + 10);
-  doc.text(shipping === 0 ? 'Miễn phí' : f(shipping), 195, finalY + 10, { align: 'right' });
+  doc.text(shipping === 0 ? 'Miễn phí' : formatCurrency(shipping), 195, finalY + 10, { align: 'right' });
 
   if (discount > 0) {
     doc.text('Giảm giá:', 115, finalY + 20);
-    doc.text(`-${f(discount)}`, 195, finalY + 20, { align: 'right' });
+    doc.text(`-${formatCurrency(discount)}`, 195, finalY + 20, { align: 'right' });
   }
 
   doc.setLineWidth(0.5);
   doc.rect(110, finalY + 35, 85, 12);
   doc.setFontSize(18);
   doc.text('Tổng cộng:', 115, finalY + 43);
-  doc.text(f(totalAmount), 190, finalY + 43, { align: 'right' });
+  doc.text(formatCurrency(totalAmount), 190, finalY + 43, { align: 'right' });
 
-  // QR Code + Footer
   doc.addImage(qrCodeDataUrl, 'PNG', 15, finalY + 50, 28, 28);
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text('QR CODE', 29, finalY + 68, { align: 'center' });
 
   doc.setFontSize(9);
   doc.setTextColor(120);

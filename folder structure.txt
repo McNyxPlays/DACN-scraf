@@ -1,5 +1,13 @@
 model_shop_backend/
 │  
+├───public/
+│   ├───fonts/
+│   │       Roboto-Bold.ttf               
+│   │       Roboto-Regular.ttf    
+│   │       
+│   ├───images/
+│   		 logo.png
+│ 
 ├───src/
 │   ├───config/
 │   │       db.js                
@@ -43,6 +51,8 @@ model_shop_backend/
 │   ├───uploads/                 
 │   │     ├───avatars/
 │   │     ├───posts/
+│   │     ├───	invoices/
+│   │     ├───	products/
 │   │
 │   │
 │   ├───utils/

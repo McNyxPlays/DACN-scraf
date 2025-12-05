@@ -1,0 +1,3 @@
+[2025-12-05T10:51:34.051Z] Invoice error for order ORDMISQVP39609: doc.autoTable is not a function
+[2025-12-05T10:56:32.753Z] Invoice error for order ORDMISR23K6200: doc.autoTable is not a function
+[2025-12-05T11:05:57.691Z] Invoice error for order ORDMISRE7H5578: doc.autoTable is not a function
