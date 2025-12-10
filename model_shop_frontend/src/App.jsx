@@ -15,12 +15,11 @@ import Home from "./features/Home/Home";
 import Shop from "./features/Shop/Shop";
 import Community from "./features/Community/Community";
 import OrderHistory from "./features/UserProfile/Order/orderhistory";
-import MyStore from "./features/UserProfile/MyStore/mystore";
+import MyAssets from "./features/UserProfile/MyAssets/MyAssets";
 import UserProfileOverview from "./features/UserProfile/UserProfileOverview/UserProfileOverview";
 import OtherUserProfile from "./features/UserProfile/OtherUserProfile/OtherUserProfile";
 import AccountSettings from "./features/UserProfile/AccountSettings/AccountSettings";
 import Admin from "./features/Admin/Admin";
-import Favorites from "./features/Favorites/Favorites";
 import Cart from "./features/Cart/Cart";
 import Messages from "./features/UserProfile/Messages/Messages";
 import Checkout from "./features/Checkout/Checkout";
@@ -33,6 +32,12 @@ import { useSelector } from "react-redux";
 import { validateUser } from "./redux/userSlice";
 import api from "./api/index";
 import { SessionProvider } from "./context/SessionContext";
+
+import { WagmiProvider } from 'wagmi'
+import { wagmiConfig } from './web3/wagmiConfig.js'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+const queryClient = new QueryClient()
 
 // Protected Route
 const ProtectedRoute = ({ children }) => {
@@ -93,11 +98,10 @@ const AppContent = () => {
 
           {/* Các trang cần đăng nhập */}
           <Route path="/orderhistory" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
-          <Route path="/mystore" element={<ProtectedRoute><MyStore /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><UserProfileOverview /></ProtectedRoute>} />
           <Route path="/profile/:userId" element={<OtherUserProfile />} />
           <Route path="/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
-          <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
+          <Route path="/assets" element={<ProtectedRoute><MyAssets /></ProtectedRoute>} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/orderstatus" element={<OrderStatus />} />

@@ -81,7 +81,7 @@ const login = async (req, res) => {
     if (await bcrypt.compare(password, user.password)) {
       req.session.user_id = user.user_id;
       req.session.loginAttempts = 0;
-      console.log(`Success: Session user_id set to ${user.user_id}`); // Debug log (giữ để check session)
+      console.log(`Success: Session user_id set to ${user.user_id}`); 
 
       // Handle remember_me with extended maxAge
       if (remember_me) {
@@ -90,8 +90,7 @@ const login = async (req, res) => {
         req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 1 day default
       }
 
-      // Thêm debug: Check session sau khi set
-      console.log('Session after login:', req.session); // Debug để confirm session persist
+      console.log('Session after login:', req.session); 
 
       res.status(200).json({
         message: 'Login successful',
@@ -101,7 +100,7 @@ const login = async (req, res) => {
           full_name: user.full_name,
           role: user.role,
           profile_image: user.profile_image || null,
-          banner_image: user.banner_image || null  // Thêm compat schema mới
+          banner_image: user.banner_image || null  
         }
       });
     } else {
@@ -123,7 +122,7 @@ const logout = (req, res) => {
       logError('Logout failed: ' + err.message);
       return res.status(500).json({ message: 'Logout failed' });
     }
-    res.clearCookie('connect.sid'); // Xóa cookie session
+    res.clearCookie('connect.sid'); 
     res.status(200).json({ message: 'Logout successful' });
   });
 };

@@ -6,7 +6,7 @@ import api from "../../api";
 import { Toastify } from "../../components/Toastify";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { setLastOrder } from "../../redux/orderSlice";
-import { formatCurrency } from "../../utils/formatCurrency"; // ← Chỉ cần import này
+import { formatCurrency } from "../../utils/formatCurrency";
 
 export default function Checkout() {
   const [cartItems, setCartItems] = useState([]);
@@ -107,98 +107,56 @@ export default function Checkout() {
 
   // === ĐẶT HÀNG ===
   const handleSubmitOrder = async () => {
-  if (!fullName.trim() || !address.trim()) {
-    return Toastify.error("Please enter full name and shipping address");
-  }
+    if (!fullName.trim() || !address.trim()) {
+      return Toastify.error("Please enter your full name and address");
+    }
 
-  if (!guestEmail.includes('@') && !user?.email) {
-  return Toastify.error("Please enter a valid email to receive the invoice");
-  }
-
-  try {
-    const response = await api.post("/orders", {
-      csrf_token: csrfToken,
-      full_name: fullName,
-      address,
-      guest_email: guestEmail || null,
-      guest_phone: guestPhone || null,
-      promotion_id: promotionId || null,
-      session_key: user ? null : sessionKey,
-      shipping_method: "standard",
-      payment_method: paymentMethod,
-    });
-
-    // Tạo dữ liệu đơn hàng để lưu vào Redux + hiển thị OrderSuccess
-    const orderData = {
-      ...response.data,
-      full_name: fullName,
-      shipping_address: address,
-      email: guestEmail || user?.email,
-      phone_number: guestPhone || user?.phone_number,
-      total_amount: totalUSD * 25000,
-      discount_amount: discountUSD * 25000,
-      shipping_cost: 0,
-      details: cartItems.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        price_at_purchase: item.discount > 0
-          ? item.price * (1 - item.discount / 100)
-          : item.price,
-        main_image: item.image_url || item.main_image,
-      })),
-    };
-
-    // Lưu vào Redux
-    dispatch(setLastOrder(orderData));
-
-    // XÓA GIỎ HÀNG TRÊN SERVER (user hoặc guest)
     try {
-      const deletePayload = user?.user_id ? {} : { session_key: sessionKey };
-      await api.delete("/cart", { data: deletePayload });
+      const response = await api.post("/orders", {
+        csrf_token: csrfToken,
+        full_name: fullName,
+        address,
+        guest_email: guestEmail.trim() || null,  // Không bắt buộc, gửi null nếu rỗng
+        guest_phone: guestPhone || null,
+        promotion_id: promotionId || null,
+        session_key: user ? null : sessionKey,
+      });
+
+      const orderData = {
+        ...response.data,
+        full_name: fullName,
+        shipping_address: address,
+        email: guestEmail.trim() || user?.email || null,
+        phone_number: guestPhone || user?.phone_number,
+        total_amount: totalUSD * 25000,
+        discount_amount: discountUSD * 25000,
+        shipping_cost: 0,
+      };
+
+      dispatch(setLastOrder(orderData));
+      navigate("/order-success", { state: { order: orderData } });
     } catch (err) {
-      console.warn("Không thể xóa cart trên server (không ảnh hưởng trải nghiệm)", err);
+      Toastify.error(err.response?.data?.message || "Order failed");
     }
+  };
 
-    // QUAN TRỌNG: Cập nhật ngay số lượng trên Header (badge về 0)
-    window.dispatchEvent(new CustomEvent("cartUpdated"));
-
-    // Xóa session_key của guest (không còn cần nữa)
-    if (!user && sessionKey) {
-      localStorage.removeItem("guest_session_key");
-    }
-
-    // Chuyển sang trang thành công
-    navigate(`/order-success?order_code=${response.data.order_code}`, {
-      state: { order: orderData },
-    });
-
-    Toastify.success("Order placed successfully!");
-
-  } catch (err) {
-    Toastify.error(err.response?.data?.message || "Order failed");
-  }
-};
-
-  if (loading) return <div className="text-center py-20 text-2xl">Loading cart...</div>;
-  if (cartItems.length === 0) return <div className="text-center py-20 text-2xl">Your cart is empty</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-2xl">Loading...</div>;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <h1 className="text-4xl font-bold text-center mb-12 text-gray-800">Checkout</h1>
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-8">
 
-      <div className="grid lg:grid-cols-3 gap-10">
-        {/* === LEFT: FORM + PROMO === */}
+        {/* === LEFT: CHECKOUT FORM === */}
         <div className="lg:col-span-2 space-y-8">
-          {/* Shipping Info */}
           <div className="bg-white p-8 rounded-2xl shadow-lg">
-            <h2 className="text-2xl font-bold mb-6">Shipping Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <h2 className="text-3xl font-bold mb-8">Shipping Information</h2>
+            <div className="grid md:grid-cols-2 gap-6">
               <input
                 type="text"
                 placeholder="Full Name *"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="px-5 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="px-5 py-3 border rounded-lg"
                 required
               />
               <input
@@ -219,7 +177,7 @@ export default function Checkout() {
               {!user && (
                 <input
                   type="email"
-                  placeholder="Email (for invoice)"
+                  placeholder="Email (optional, for invoice)"
                   value={guestEmail}
                   onChange={(e) => setGuestEmail(e.target.value)}
                   className="md:col-span-2 px-5 py-3 border rounded-lg"

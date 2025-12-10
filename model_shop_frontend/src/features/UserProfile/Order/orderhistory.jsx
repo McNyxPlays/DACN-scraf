@@ -1,37 +1,46 @@
+// src/features/UserProfile/Order/orderhistory.jsx
 import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux"; // Để lấy user từ Redux
+import api from "../../../api/index"; // Giả sử api ở đây
+import { Toastify } from "../../../components/Toastify";
 import OrderHistorySidebar from "./leftsidebar";
 import OrderHistoryDetailsView from "./detailsview";
 
 function OrderHistory() {
+  const user = useSelector((state) => state.user.user); // Lấy user từ Redux
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const mockOrders = [
-      {
-        id: 1,
-        model: "Gundam RX-78-2",
-        status: "Đã mua",
-        date: "19/05/2025",
-        total: 550000,
-      },
-      {
-        id: 2,
-        model: "Zaku II",
-        status: "Đang giao",
-        date: "18/05/2025",
-        total: 320000,
-      },
-      {
-        id: 3,
-        model: "Gundam Wing",
-        status: "Đã mua",
-        date: "17/05/2025",
-        total: 600000,
-      },
-    ];
-    setOrders(mockOrders);
-  }, []);
+    if (!user?.user_id) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchOrders = async () => {
+      try {
+        const response = await api.get("/user/orders", {
+          params: { user_id: user.user_id },
+        });
+        if (response.data.status === "success") {
+          setOrders(response.data.orders || []);
+        } else {
+          Toastify.error(response.data.message || "Failed to load orders");
+        }
+      } catch (err) {
+        Toastify.error("Network error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, [user?.user_id]);
+
+  if (loading) {
+    return <div className="text-center py-12">Loading orders...</div>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -47,10 +56,10 @@ function OrderHistory() {
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                Không có đơn hàng được chọn
+                No order selected
               </h3>
               <p className="text-gray-500">
-                Chọn một đơn hàng từ danh sách để xem chi tiết.
+                Select an order from the list to view details.
               </p>
             </div>
           )}

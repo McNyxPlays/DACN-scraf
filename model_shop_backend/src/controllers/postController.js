@@ -130,10 +130,9 @@ const updatePost = async (req, res) => {
       await conn.query('INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)', 
         [post_id, user_id, sanitizeInput(content)]
       );
-      return res.json({ status: 'success', message: 'Commented' }); // ĐÃ THÊM RETURN
+      return res.json({ status: 'success', message: 'Commented' }); 
     }
 
-    // Nếu không phải like cũng không phải comment
     return res.status(400).json({ status: 'error', message: 'Invalid action' });
 
   } catch (error) {

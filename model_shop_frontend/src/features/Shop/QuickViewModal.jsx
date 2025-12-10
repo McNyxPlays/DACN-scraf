@@ -5,6 +5,7 @@ import { logoutUser } from "../../redux/userSlice";
 import api from "../../api/index";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { Toastify } from "../../components/Toastify";
+import { formatCurrency } from "../../utils/formatCurrency";
 import { useSelector } from "react-redux";
 
 function QuickViewModal({ productId, isOpen, toggleModal }) {
@@ -33,16 +34,12 @@ function QuickViewModal({ productId, isOpen, toggleModal }) {
             setProduct(response.data.data);
             setError("");
           } else {
-            const errorMsg = response.data.message || "Product not found";
+            const errorMsg = response.data.message || "Unknown error";
             setError(errorMsg);
             Toastify.error(errorMsg);
-            setProduct(null);
           }
         } catch (err) {
-          const errorMsg =
-            err.response?.data?.message ||
-            err.message ||
-            "Network error. Please check your connection or server status.";
+          const errorMsg = err.response?.data?.message || err.message || "Network or server error";
           setError(errorMsg);
           Toastify.error(errorMsg);
         } finally {
@@ -50,150 +47,128 @@ function QuickViewModal({ productId, isOpen, toggleModal }) {
         }
       };
       fetchProduct();
-    } else {
-      setProduct(null);
-      setQuantity(1);
-      setError("");
     }
-  }, [productId, isOpen]);
+  }, [isOpen, productId]);
 
   const handleQuantityChange = (delta) => {
-    setQuantity((prev) => {
-      const newQty = prev + delta;
-      return newQty > 0 && newQty <= (product?.stock_quantity || 0) ? newQty : prev;
-    });
+    setQuantity((prev) => Math.max(1, prev + delta));
   };
 
   const handleAddToCart = async () => {
-    if (!product || product.stock_quantity < quantity) {
-      Toastify.error("Insufficient stock or product unavailable.");
-      return;
-    }
-
-    const data = { product_id: product.product_id, quantity };
-    if (!user) {
-      data.session_key = sessionKey;
-    }
+    if (!product) return;
 
     try {
-      const response = await api.post('/cart', data);
+      const params = { product_id: productId, quantity, session_key: sessionKey };
+      const response = await api.post("/cart", params);
       if (response.data.status === "success") {
-        Toastify.success("Added to cart!");
         window.dispatchEvent(new CustomEvent("cartUpdated"));
-        setTimeout(() => toggleModal(), 1500);
+        Toastify.success("Added to cart");
+        toggleModal();
       } else {
-        Toastify.error(response.data.message || "Failed to add to cart.");
+        Toastify.error(response.data.message || "Failed to add to cart");
       }
     } catch (err) {
-      if (err.response?.status === 401) {
-        dispatch(logoutUser());
-        Toastify.error("Session expired. Please login again.");
-      } else {
-        Toastify.error(err.response?.data?.message || "Network error.");
-      }
+      Toastify.error(err.response?.data?.message || err.message || "Network error");
     }
   };
 
   const handleAddToWishlist = async () => {
-    if (!user || !user.user_id) {
-      Toastify.error("Please log in to add to wishlist.");
-      return;
-    }
+    if (!user?.user_id || !productId) return;
+
     try {
-      const response = await api.post("/favorites", { product_id: product.product_id });
+      // Thêm user_id vào body để backend xử lý
+      const response = await api.post("/favorites", { user_id: user.user_id, product_id: productId });
       if (response.data.status === "success") {
-        Toastify.success("Added to wishlist!");
+        window.dispatchEvent(new CustomEvent("favoritesUpdated")); // Để refresh FavoritesTab nếu mở
+        Toastify.success("Added to wishlist");
       } else {
-        Toastify.error(response.data.message || "Failed to add to wishlist.");
+        Toastify.error(response.data.message || "Failed to add to wishlist");
       }
     } catch (err) {
-      if (err.response?.status === 401) {
-        dispatch(logoutUser());
-        Toastify.error("Session expired. Please login again.");
-      } else {
-        Toastify.error(err.response?.data?.message || "Network error.");
-      }
+      Toastify.error(err.response?.data?.message || err.message || "Network error");
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-      <div className="bg-white w-full max-w-4xl rounded-xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={toggleModal}
+    >
+      <div
+        className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={toggleModal}
           className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
         >
-          <i className="ri-close-line ri-xl"></i>
+          <i className="ri-close-line text-2xl"></i>
         </button>
 
-        {loading ? (
-          <div className="text-center py-8">Loading product...</div>
-        ) : error ? (
-          <p className="text-red-500 text-center">{error}</p>
-        ) : product ? (
+        {loading && <div className="text-center py-12">Loading product...</div>}
+        {error && <p className="text-red-500 text-center py-12">{error}</p>}
+
+        {product && !loading && !error ? (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-4">
-                <ImageWithFallback
-                  src={product.main_image ? `/Uploads/products/${product.main_image}` : "/placeholder-image.jpg"}
-                  alt={product.name}
-                  className="w-full h-96 object-cover rounded-lg"
-                />
+                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                  <ImageWithFallback
+                    src={product.main_image ? `/uploads/products/${product.main_image}` : "/placeholder.jpg"}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                    fallback="/placeholder.jpg"
+                  />
+                </div>
                 <div className="grid grid-cols-4 gap-2">
-                  {product.images?.map((img, index) => (
-                    <ImageWithFallback
-                      key={index}
-                      src={`/Uploads/products/${img}`}
-                      alt={`${product.name} thumbnail`}
-                      className="w-full h-24 object-cover rounded-lg cursor-pointer"
-                    />
+                  {product.images?.slice(1).map((img, idx) => (
+                    <div key={idx} className="aspect-square bg-gray-100 rounded overflow-hidden">
+                      <ImageWithFallback
+                        src={`/uploads/products/${img.image_url}`}
+                        alt={`${product.name} thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        fallback="/placeholder.jpg"
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold">{product.name}</h2>
-                <p className="text-xl font-semibold">
-                  {(product.price * exchangeRate).toLocaleString("vi-VN")} VND
-                </p>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2">{product.name}</h2>
+                  <p className="text-2xl text-primary font-semibold">
+                    {formatCurrency(product.price)} {/* {product.price?.toLocaleString()} VND */}
+                  </p>
+                </div>
                 <p className="text-gray-600">{product.description}</p>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Availability:</span>
-                  <span
-                    className={`${
-                      product.stock_quantity > 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {product.stock_quantity > 0 ? "In Stock" : "Out of Stock"}
-                  </span>
+                <div className="space-y-2">
+                  <p className="font-medium">Brand: {product.brand_name}</p>
+                  <p className="font-medium">Category: {product.category_name}</p>
+                  <p className="font-medium">Stock: {product.stock_quantity}</p>
+                  <p className="font-medium">Views: {product.view_count}</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center border rounded-lg">
                     <button
                       onClick={() => handleQuantityChange(-1)}
-                      className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-l-lg"
+                      className="px-4 py-2 hover:bg-gray-50"
                       disabled={quantity <= 1}
                     >
-                      <i className="ri-subtract-line"></i>
+                      -
                     </button>
-                    <span className="w-12 text-center font-medium">{quantity}</span>
+                    <span className="px-4 py-2 min-w-[3rem] text-center">{quantity}</span>
                     <button
                       onClick={() => handleQuantityChange(1)}
-                      className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-r-lg"
-                      disabled={product.stock_quantity <= 0 || quantity >= product.stock_quantity}
+                      className="px-4 py-2 hover:bg-gray-50"
                     >
-                      <i className="ri-add-line"></i>
+                      +
                     </button>
                   </div>
                   <button
                     onClick={handleAddToCart}
-                    className={`flex-1 py-2 font-medium rounded-button transition flex items-center justify-center gap-2 ${
-                      product.stock_quantity <= 0
-                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                        : "bg-primary text-white hover:bg-primary/90"
-                    }`}
-                    disabled={product.stock_quantity <= 0}
+                    className="flex-1 bg-primary text-white py-3 rounded-lg hover:bg-primary-dark transition flex items-center justify-center gap-2"
                   >
                     <i className="ri-shopping-cart-line"></i>
                     Add to Cart

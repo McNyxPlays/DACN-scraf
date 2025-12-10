@@ -4,22 +4,17 @@ const { logError } = require('../config/functions');
 const app = require('../app');
 const redisClient = require('../config/redis');
 
-// Helper: lấy identifier (user_id hoặc session_key) – SỬA HOÀN HẢO CHO GUEST
+
 const getCartIdentifier = (req) => {
-  // 1. Ưu tiên: đã login → dùng user_id từ session
   if (req.session.user_id) {
     return { user_id: req.session.user_id, session_key: null };
   }
-
-  // 2. Guest: lấy session_key từ query/body → lưu vào session để dùng lại
   let session_key = req.query.session_key || req.body.session_key;
 
-  // Nếu có truyền lên → lưu vào session nếu chưa có hoặc khác
   if (session_key && (!req.session.session_key || req.session.session_key !== session_key)) {
     req.session.session_key = session_key;
   }
 
-  // Dùng cái đã lưu trong session (nếu đã có từ lần trước)
   session_key = req.session.session_key || session_key;
 
   return { user_id: null, session_key };
@@ -37,13 +32,11 @@ const addToCart = async (req, res) => {
   try {
     conn = await db.getConnection();
 
-    // Kiểm tra tồn kho
     const [prod] = await conn.query('SELECT stock_quantity FROM products WHERE product_id = ?', [product_id]);
     if (!prod.length || prod[0].stock_quantity < quantity) {
       return res.status(400).json({ status: 'error', message: 'Insufficient stock' });
     }
 
-    // Kiểm tra đã có trong giỏ chưa
     let sql = 'SELECT cart_id, quantity FROM carts WHERE product_id = ? AND ';
     let params = [product_id];
     if (user_id) { sql += 'user_id = ?'; params.push(user_id); }
@@ -62,7 +55,6 @@ const addToCart = async (req, res) => {
       await conn.query(insertSql, [user_id || session_key, product_id, quantity]);
     }
 
-    // Invalidate cache (thêm cho guest)
     const cacheKey = user_id ? `cart_count_${user_id}` : `cart_count_guest_${session_key}`;
     redisClient.del(cacheKey);
 
@@ -104,9 +96,9 @@ const getCart = async (req, res) => {
     const cacheKey = user_id ? `cart_count_${user_id}` : `cart_count_guest_${session_key}`;
     redisClient.set(cacheKey, count, { EX: 60 });
 
-    res.json({ status: 'success', data: cart }); // Giữ nguyên 'data' để khớp với frontend
+    res.json({ status: 'success', data: cart }); 
   } catch (err) {
-    console.error('getCart error:', err.message); // Log lỗi chi tiết
+    console.error('getCart error:', err.message); 
     await logError('getCart: ' + err.message);
     res.status(500).json({ status: 'error', message: 'Server error' });
   } finally {

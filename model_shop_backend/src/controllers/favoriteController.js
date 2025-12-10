@@ -33,7 +33,7 @@ const getFavorites = async (req, res) => {
       product_id: item.product_id,
       name: item.name,
       price: item.price,
-      image: item.image_url ? `/Uploads/${item.image_url}` : '/placeholder.jpg'
+      image: item.main_image ? `/uploads/products/${item.main_image}` : '/placeholder.jpg',
     }));
 
     res.json({ status: 'success', favorites: formattedFavorites });
@@ -59,28 +59,20 @@ const addFavorite = async (req, res) => {
 
   try {
     const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT user_id FROM users WHERE user_id = ? AND is_active = TRUE', [user_id]);
-    if (!userRows[0]) {
-      return res.status(401).json({ status: 'error', message: 'User not found or inactive' });
-    }
-
-    const [productRows] = await pool.query('SELECT product_id FROM products WHERE product_id = ?', [product_id]);
-    if (!productRows[0]) {
-      return res.status(404).json({ status: 'error', message: 'Product not found' });
-    }
-
-    const [existingRows] = await pool.query(
+    const [existing] = await pool.query(
       'SELECT saved_id FROM user_saved_items WHERE user_id = ? AND product_id = ? AND save_type = "favorite"',
       [user_id, product_id]
     );
-    if (existingRows[0]) {
-      return res.status(400).json({ status: 'error', message: 'Product already in favorites' });
+
+    if (existing.length > 0) {
+      return res.status(409).json({ status: 'error', message: 'Already favorited' });
     }
 
     const [result] = await pool.query(
       'INSERT INTO user_saved_items (user_id, product_id, save_type) VALUES (?, ?, "favorite")',
       [user_id, product_id]
     );
+
     res.json({ status: 'success', saved_id: result.insertId });
   } catch (error) {
     await logError('Error in favorites: ' + error.message);

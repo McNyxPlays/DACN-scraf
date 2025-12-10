@@ -1,219 +1,236 @@
-model_shop_backend/
-│  
-├───public/
-│   ├───fonts/
-│   │       Roboto-Bold.ttf               
-│   │       Roboto-Regular.ttf    
-│   │       
-│   ├───images/
-│   		 logo.png
-│ 
-├───src/
-│   ├───config/
-│   │       db.js                
-│   │       functions.js     
-│   │       redis.js  
-│   │
-│   ├───controllers/             
-│   │       authController.js    
-│   │       brandController.js   
-│   │       cartController.js   
-│   │       categoryController.js  
-│   │       countController.js  
-│   │       favoriteController.js   
-│   │       notificationController.js   
-│   │       orderController.js   
-│   │       postController.js 
-│   │       productController.js          
-│   │       promotionController.js  
-│   │       userController.js  
-│   │
-│   ├───logs/
-│   │       error.log
-│   │
-│   ├───models/      
-│   │       brandModel.js      
-│   │       cartModel.js     
-│   │       categoryModel.js
-│   │       favoriteModel.js
-│   │       notificationModel.js
-│   │       postModel.js
-│   │       productModel.js
-│   │       promotionModel.js
-│   │       userModel.js
-│   │
-│   ├───routes/
-│   │       api.js
-│   │
-│   ├───socket/
-│   │       notificationHandler.js
-│   │
-│   ├───uploads/                 
-│   │     ├───avatars/
-│   │     ├───posts/
-│   │     ├───	invoices/
-│   │     ├───	products/
-│   │
-│   │
-│   ├───utils/
-│   │      emitNotification.js
-│   │      formatCurrency.js
-│   │      invoiceGenerator.js
-│   │      sendGlobalNotification.js
-│   │      sendInvoiceEmail.js
-│   │      socket.js
-│   │    
-│   ├───app.js             
-│   └───server.js              
-
-
-model_shop_frontend
+mmodel_shop_backend/
 │
-├───public
-│       favicon.ico
-│       vite.svg
+├── public/
+│   ├── fonts/
+│   │     ├── Roboto-Bold.ttf
+│   │     └── Roboto-Regular.ttf
+│   └── images/
+│         └── logo.png
 │
-└───src
-    │   App.jsx
-    │   jsconfig.json
-    │   main.jsx
-    │
-    ├───api
-    │       index.js
-    │
-    ├───assets
-    │   │   react.svg
-    │   │
-    │   ├───fonts
-    │   └───images
-    ├───components
-    │   │   BackToTop.jsx
-    │   │   Footer.jsx
-    │   │   Header.jsx
-    │   │   Toastify.jsx
-    │   │
-    │   └───LoginModal
-    │           LoginModal.css
-    │           LoginModal.jsx
-    │
-    ├───redux
-    │     │   cartSlice.js
-    │     │   notificationSlice.js
-    │     │   store.js
-    │     │   userSlice.js
-    │
-    ├───context
-    │     │   SessionContext.jsx
-    │     │	   SocketContext.jsx
-    │
-    ├───utils/
-    │     ├── constants.js         
-    │     ├── formatCurrency.js   
-    │     ├── generateInvoicePDF.js
-    │     └── usePDFHandlers.js
-    │  
-    │
-    ├───features
-    │   ├───Admin
-    │   │   │   Admin.jsx
-    │   │   │   ErrorBoundary.jsx
-    │   │   │
-    │   │   ├───BrandsManagement
-    │   │   │       AddBrand.jsx
-    │   │   │       BrandsManagement.jsx
-    │   │   │       EditBrand.jsx
-    │   │   │
-    │   │   ├───CategoriesManagement
-    │   │   │       AddCategories.jsx
-    │   │   │       CategoriesManagement.jsx
-    │   │   │       EditCategories.jsx
-    │   │   │
-    │   │   ├───ProductManagement
-    │   │   │       AddProduct.jsx
-    │   │   │       EditProduct.jsx
-    │   │   │       ProductManagement.jsx
-    │   │   │
-    │   │   └───UserManagement
-    │   │           AddUser.jsx
-    │   │           EditUser.jsx
-    │   │           UserManagement.jsx
-    │   │
-    │   ├───Cart
-    │   │       Cart.jsx
-    │   │       Cartitem.jsx
-    │   │
-    │   ├───checkout
-    │   │       checkout.jsx
-    │   │       OrderConfirmation.jsx
-    │   │
-    │   ├───Community
-    │   │       Community.jsx
-    │   │       FeaturedContent.jsx
-    │   │       FeaturedPosts.jsx
-    │   │       ForumsSection.jsx
-    │   │       LeftSidebar.jsx
-    │   │       RightSidebar.jsx
-    │   │       ShowcaseSection.jsx
-    │   │       TutorialsEvents.jsx
-    │   │
-    │   ├───Favorites
-    │   │       FavoriteItem.jsx
-    │   │       Favorites.jsx
-    │   │
-    │   ├───Home
-    │   │   │   Categories.jsx
-    │   │   │   FeaturedProducts.jsx
-    │   │   │   Home.jsx
-    │   │   │   NewsCommunity.jsx
-    │   │   │   RecentlyViewed.jsx
-    │   │   │
-    │   │   └───Hero
-    │   │           Hero.css
-    │   │           Hero.jsx
-    │   │
-    │   ├───Shop
-    │   │       FiltersSidebar.jsx
-    │   │       MobileFilterSidebar.jsx
-    │   │       ProductsGrid.jsx
-    │   │       QuickViewModal.jsx
-    │   │       Shop.jsx
-    │   │       ShopBanner.jsx
-    │   │
-    │   └───UserProfile
-    │        ├───AccountSettings
-    │        │       AccountManagement.jsx
-    │        │       AccountSettings.jsx
-    │        │       DisplaySettings.jsx
-    │        │       NotificationSettings.jsx
-    │        │       PrivacySettings.jsx
-    │        │       ProfileSettings.jsx
-    │        │
-    │        ├───Messages
-    │        │       ConversationView.jsx
-    │        │       Messages.jsx
-    │        │       MessagesSidebar.jsx
-    │        │
-    │        ├───Notifications
-    │        │       NotificationItem.jsx
-    │        │       Notifications.jsx
-    │        │       NotificationsHeader.jsx
-    │        │       NotificationsPagination.jsx
-    │        │       NotificationsSidebar.jsx
-    │        │
-    │        ├───Order
-    │        │       OrderDetailsView.jsx
-    │        │       Orders.jsx
-    │        │       OrdersSidebar.jsx
-    │        │
-    │        └───UserProfileOverview
-    │                MainContent.jsx
-    │                ProfileBanner.jsx
-    │                ProfileStats.jsx
-    │                SidebarLeft.jsx
-    │                SidebarRight.jsx
-    │                UserProfileOverview.jsx
-    │
-    └───styles
-            App.css
-            CommunityHub.module.css
-            index.css
+├── src/
+│   ├── config/
+│   │     ├── db.js
+│   │     ├── functions.js
+│   │     └── redis.js
+│   │
+│   ├── controllers/
+│   │     ├── authController.js
+│   │     ├── brandController.js
+│   │     ├── cartController.js
+│   │     ├── categoryController.js
+│   │     ├── countController.js
+│   │     ├── favoriteController.js
+│   │     ├── notificationController.js
+│   │     ├── orderController.js
+│   │     ├── postController.js
+│   │     ├── productController.js
+│   │     ├── promotionController.js
+│   │     └── userController.js
+│   │
+│   ├── logs/
+│   │     └── error.log
+│   │
+│   ├── models/
+│   │     ├── brandModel.js
+│   │     ├── cartModel.js
+│   │     ├── categoryModel.js
+│   │     ├── favoriteModel.js
+│   │     ├── notificationModel.js
+│   │     ├── postModel.js
+│   │     ├── productModel.js
+│   │     ├── promotionModel.js
+│   │     └── userModel.js
+│   │
+│   ├── routes/
+│   │     └── api.js
+│   │
+│   ├── socket/
+│   │     └── notificationHandler.js
+│   │
+│   ├── uploads/
+│   │     ├── avatars/
+│   │     ├── posts/
+│   │     ├── invoices/
+│   │     └── products/
+│   │
+│   ├── utils/
+│   │     ├── emitNotification.js
+│   │     ├── formatCurrency.js
+│   │     ├── invoiceGenerator.js
+│   │     ├── sendGlobalNotification.js
+│   │     ├── sendInvoiceEmail.js
+│   │     └── socket.js
+│   │
+│   ├── app.js
+│   └── server.js
+           
+=========================================================================
+
+model_shop_frontend/
+│
+├── public/
+│     ├── favicon.ico
+│     └── vite.svg
+│
+└── src/
+      ├── App.jsx
+      ├── jsconfig.json
+      ├── main.jsx
+      │
+      ├── api/
+      │     └── index.js
+      │
+      ├── assets/
+      │     ├── react.svg
+      │     ├── fonts/
+      │     └── images/
+      │
+      ├── components/
+      │     ├── BackToTop.jsx
+      │     ├── Footer.jsx
+      │     ├── Header.jsx
+      │     ├── Toastify.jsx
+      │     └── LoginModal/
+      │            ├── LoginModal.css
+      │            └── LoginModal.jsx
+      │
+      ├── redux/
+      │     ├── cartSlice.js
+      │     ├── notificationSlice.js
+      │     ├── store.js
+      │     └── userSlice.js
+      │
+      ├── context/
+      │     ├── SessionContext.jsx
+      │     └── SocketContext.jsx
+      │
+      ├── utils/
+      │     ├── constants.js
+      │     ├── formatCurrency.js
+      │     ├── generateInvoicePDF.js
+      │     └── usePDFHandlers.js
+      │
+      ├── features/
+      │     ├── Admin/
+      │     │     ├── Admin.jsx
+      │     │     ├── ErrorBoundary.jsx
+      │     │     ├── BrandsManagement/
+      │     │     │       ├── AddBrand.jsx
+      │     │     │       ├── BrandsManagement.jsx
+      │     │     │       └── EditBrand.jsx
+      │     │     ├── CategoriesManagement/
+      │     │     │       ├── AddCategories.jsx
+      │     │     │       ├── CategoriesManagement.jsx
+      │     │     │       └── EditCategories.jsx
+      │     │     ├── ProductManagement/
+      │     │     │       ├── AddProduct.jsx
+      │     │     │       ├── EditProduct.jsx
+      │     │     │       └── ProductManagement.jsx
+      │     │     └── UserManagement/
+      │     │             ├── AddUser.jsx
+      │     │             ├── EditUser.jsx
+      │     │             └── UserManagement.jsx
+      │     │
+      │     ├── Cart/
+      │     │     ├── Cart.jsx
+      │     │     └── CartItem.jsx
+      │     │
+      │     ├── Checkout/
+      │     │     ├── Checkout.jsx
+      │     │     └── OrderConfirmation.jsx
+      │     │
+      │     ├── Community/
+      │     │     ├── Community.jsx
+      │     │     ├── FeaturedContent.jsx
+      │     │     ├── FeaturedPosts.jsx
+      │     │     ├── ForumsSection.jsx
+      │     │     ├── LeftSidebar.jsx
+      │     │     ├── RightSidebar.jsx
+      │     │     ├── ShowcaseSection.jsx
+      │     │     └── TutorialsEvents.jsx
+      │     │
+      │     ├── Home/
+      │     │     ├── Categories.jsx
+      │     │     ├── FeaturedProducts.jsx
+      │     │     ├── Home.jsx
+      │     │     ├── NewsCommunity.jsx
+      │     │     ├── RecentlyViewed.jsx
+      │     │     └── Hero/
+      │     │           ├── Hero.css
+      │     │           └── Hero.jsx
+      │     │
+      │     ├── Shop/
+      │     │     ├── FiltersSidebar.jsx
+      │     │     ├── MobileFilterSidebar.jsx
+      │     │     ├── ProductsGrid.jsx
+      │     │     ├── QuickViewModal.jsx
+      │     │     ├── Shop.jsx
+      │     │     └── ShopBanner.jsx
+      │     │
+      │     └── UserProfile/
+      │           ├── AccountSettings/
+      │           │     ├── AccountManagement.jsx
+      │           │     ├── AccountSettings.jsx
+      │           │     ├── DisplaySettings.jsx
+      │           │     ├── NotificationSettings.jsx
+      │           │     ├── PrivacySettings.jsx
+      │           │     └── ProfileSettings.jsx
+      │           │
+      │           ├── Messages/
+      │           │     ├── ConversationView.jsx
+      │           │     ├── Messages.jsx
+      │           │     └── MessagesSidebar.jsx
+      │           │
+      │           ├── MyAssets/
+      │           │     ├── components/
+      │           │     │       ├── AssetItem.jsx
+      │           │     │       └── ProductSellerCard.jsx
+      │           │     ├── tabs/
+      │           │     │       ├── CreatedNFTsTab.jsx
+      │           │     │       ├── FavoritesTab.jsx.jsx
+      │           │     │       ├── MyProductsTab.jsx
+      │           │     │       ├── ReceivedNFTsTab.jsx
+      │           │     │       └── SoldHistoryTab.jsx
+      │           │     ├── MyAssets.jsx
+      │           │     └── MyAssetsHeader.jsx
+      │           │
+      │           ├── Notifications/
+      │           │     ├── NotificationItem.jsx
+      │           │     ├── Notifications.jsx
+      │           │     ├── NotificationsHeader.jsx
+      │           │     ├── NotificationsPagination.jsx
+      │           │     └── NotificationsSidebar.jsx
+      │           │
+      │           ├── Order/
+      │           │     ├── OrderDetailsView.jsx
+      │           │     ├── Orders.jsx
+      │           │     └── OrdersSidebar.jsx
+      │           │
+      │           ├── OtherUserProfile/
+      │           │     ├── OtherUserProfile.jsx
+      │           │     ├── PostDetail.jsx
+      │           │     ├── ProfileBanner.jsx
+      │           │     ├── SidebarLeft.jsx
+      │           │     └── UserPosts.jsx
+      │           │
+      │           └── UserProfileOverview/
+      │                 ├── MainContent.jsx
+      │                 ├── ProfileBanner.jsx
+      │                 ├── ProfileStats.jsx
+      │                 ├── SidebarLeft.jsx
+      │                 ├── SidebarRight.jsx
+      │                 └── UserProfileOverview.jsx
+      │
+      ├── web3/
+      │     ├── components/
+      │     │       ├── CheckboxNFT.jsx
+      │     │       ├── MintReceiptButton.jsx
+      │     │       ├── NFTCard.jsx
+      │     │       └── UserNFTs.jsx
+      │     ├── nftABI.js
+      │     └── useNFTList.js
+      │
+      └── styles/
+            ├── App.css
+            ├── CommunityHub.module.css
+            └── index.css

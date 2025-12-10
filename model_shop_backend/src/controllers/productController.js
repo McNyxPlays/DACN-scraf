@@ -6,7 +6,6 @@ const path = require('path');
 const app = require('../app');
 const redisClient = require('../config/redis');
 
-// Helper: chuyển status cũ → boolean flags (dùng khi frontend vẫn gửi status)
 const mapStatusToFlags = (status) => {
   const flags = {
     is_new: false,
@@ -79,7 +78,7 @@ const getBrands = async (req, res) => {
 };
 
 const getProduct = async (req, res) => {
-  const id = parseInt(req.params.id || req.query.id); // Hỗ trợ cả params và query
+  const id = parseInt(req.params.id || req.query.id); 
   if (!id || isNaN(id)) return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
 
   const cacheKey = `product_${id}`;
@@ -311,7 +310,7 @@ const addProduct = async (req, res) => {
 
         const url = `products/${filename}`;
         await conn.query('INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
-          [product_id, url, i === 0]); // First as main
+          [product_id, url, i === 0]);
       }
     }
 
@@ -336,7 +335,7 @@ const updateProduct = async (req, res) => {
   if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });
 
   const { name, category_id, brand_id, price, discount, stock_quantity, description, status } = req.body;
-  const newImages = req.files?.newImages; // Giả sử frontend gửi new images riêng
+  const newImages = req.files?.newImages; 
 
   const flags = mapStatusToFlags(status);
 
@@ -345,7 +344,6 @@ const updateProduct = async (req, res) => {
     conn = await db.getConnection();
     await conn.query('START TRANSACTION');
 
-    // Check ownership or admin
     const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [id]);
     if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
       return res.status(403).json({ status: 'error', message: 'Unauthorized' });
@@ -373,7 +371,7 @@ const updateProduct = async (req, res) => {
 
         const url = `products/${filename}`;
         await conn.query('INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
-          [id, url, false]); // New not main by default
+          [id, url, false]);
       }
     }
 
@@ -403,7 +401,6 @@ const deleteProduct = async (req, res) => {
     conn = await db.getConnection();
     await conn.query('START TRANSACTION');
 
-    // Check ownership or admin
     const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [id]);
     if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
       return res.status(403).json({ status: 'error', message: 'Unauthorized' });
@@ -445,7 +442,6 @@ const deleteProductImage = async (req, res) => {
   try {
     conn = await db.getConnection();
 
-    // Check ownership
     const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [product_id]);
     if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
       return res.status(403).json({ status: 'error', message: 'Unauthorized' });

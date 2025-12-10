@@ -124,7 +124,7 @@ const markNotificationsRead = async (req, res) => {
 };
 
 const getNotificationCount = async (req, res) => {
-  const { user_id, session_key } = getIdentifier(req);  // Áp dụng helper mới cho count
+  const { user_id, session_key } = getIdentifier(req); 
   if (!user_id && !session_key) return res.status(401).json({ count: 0 });
 
   const identifier = user_id || session_key;

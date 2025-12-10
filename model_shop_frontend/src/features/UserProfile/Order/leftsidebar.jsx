@@ -1,9 +1,10 @@
+// src/features/UserProfile/Order/leftsidebar.jsx
 import React from "react";
 
-function StoreSidebar({ orders, selectedOrder, setSelectedOrder }) {
+function OrderHistorySidebar({ orders, selectedOrder, setSelectedOrder }) {
   return (
     <div className="w-full lg:w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="text-xl font-semibold text-gray-900 mb-4">Đơn hàng</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Orders</h2>
       <div className="space-y-3">
         {orders.length > 0 ? (
           orders.map((order) => (
@@ -26,11 +27,11 @@ function StoreSidebar({ orders, selectedOrder, setSelectedOrder }) {
             </div>
           ))
         ) : (
-          <p className="text-gray-500 text-sm">Chưa có đơn hàng nào.</p>
+          <p className="text-gray-500 text-sm">No orders yet.</p>
         )}
       </div>
     </div>
   );
 }
 
-export default StoreSidebar;
+export default OrderHistorySidebar;

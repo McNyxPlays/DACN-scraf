@@ -5,6 +5,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const bcrypt = require('bcrypt');
 const app = require('../app');
+const { ethers } = require("ethers");
+const { mintUserNFT } = require('../utils/mintUserNFT');
 const redisClient = require('../config/redis');
 
 const getUserStats = async (req, res) => {
@@ -33,7 +35,7 @@ const getUserStats = async (req, res) => {
       posts: posts[0].count
     };
 
-    await redisClient.set(cacheKey, JSON.stringify(stats), 'EX', 600); // Cache 10 phút
+    await redisClient.set(cacheKey, JSON.stringify(stats), 'EX', 600); 
     res.json({ status: 'success', ...stats });
   } catch (error) {
     await logError('getUserStats error: ' + error.message);
@@ -126,7 +128,7 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'No fields to update' });
     }
 
-    query = query.slice(0, -1); // Remove last comma
+    query = query.slice(0, -1);
     query += ' WHERE user_id = ?';
     params.push(user_id);
 
@@ -134,7 +136,7 @@ const updateUser = async (req, res) => {
     if (result.affectedRows === 0) throw new Error('No changes');
 
     await conn.query('COMMIT');
-    await redisClient.del(`user_stats_${user_id}`); // Invalidate stats cache
+    await redisClient.del(`user_stats_${user_id}`);
     res.json({ status: 'success', message: 'User updated' });
   } catch (error) {
     await conn.query('ROLLBACK');
@@ -169,4 +171,98 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { getUserStats, getUsersMana, updateUser, deleteUser };
+
+const connectWallet = async (req, res) => {
+  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+
+  const { wallet_address } = req.body;
+  if (!wallet_address || !ethers.isAddress(wallet_address)) return res.status(400).json({ status: 'error', message: 'Invalid wallet address' });
+
+  let conn;
+  try {
+    conn = await db.getConnection();
+    await conn.query('UPDATE users SET wallet_address = ? WHERE user_id = ?', [wallet_address, req.session.user_id]);
+    res.json({ status: 'success', message: 'Wallet connected' });
+  } catch (error) {
+    await logError('connectWallet error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to connect wallet' });
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+const createUserNFT = async (req, res) => {
+  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+
+  const user_id = req.session.user_id;
+  const { tokenURI } = req.body;
+
+  if (!tokenURI) return res.status(400).json({ status: 'error', message: 'Token URI required' });
+
+  let conn;
+  try {
+    conn = await db.getConnection();
+    const [rows] = await conn.query('SELECT wallet_address FROM users WHERE user_id = ?', [user_id]);
+    const wallet_address = rows[0]?.wallet_address;
+
+    if (!wallet_address) return res.status(400).json({ status: 'error', message: 'Please connect wallet first' });
+
+    const result = await mintUserNFT(user_id, wallet_address, tokenURI);
+
+    if (result.success) {
+      res.json({ status: 'success', nft: { token_id: result.tokenId, tx_hash: result.txHash } });
+    } else {
+      res.status(500).json({ status: 'error', message: result.error });
+    }
+  } catch (error) {
+    await logError('createUserNFT error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to create NFT' });
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+
+const getCreatedNFTs = async (req, res) => {
+  const user_id = req.query.user_id || req.session.user_id;
+
+  if (!user_id) {
+    return res.status(400).json({ status: 'error', message: 'User ID required' });
+  }
+
+  let conn;
+  try {
+    conn = await db.getConnection();
+    const [nfts] = await conn.query(`
+      SELECT 
+        mint_id, token_id, design_id, tx_hash, nft_metadata_url, nft_image_url,
+        price, royalty_percent, max_supply, minted_at
+      FROM user_nft_mints 
+      WHERE user_id = ?
+      ORDER BY minted_at DESC
+    `, [user_id]);
+
+    res.json({ 
+      status: 'success', 
+      nfts: nfts.map(nft => ({
+        mint_id: nft.mint_id,
+        token_id: nft.token_id,
+        design_id: nft.design_id,
+        tx_hash: nft.tx_hash,
+        nft_image_url: nft.nft_image_url,
+        nft_metadata_url: nft.nft_metadata_url,
+        name: `NFT #${nft.token_id}`,
+        price: nft.price || 0,
+        royalty_percent: nft.royalty_percent || 0,
+        max_supply: nft.max_supply || 0,
+      }))
+    });
+  } catch (error) {
+    await logError('getCreatedNFTs error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to fetch NFTs' });
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+module.exports = { getUserStats, getUsersMana, updateUser, deleteUser, createUserNFT, connectWallet, getCreatedNFTs };

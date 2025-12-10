@@ -244,17 +244,14 @@ const Header = ({ setIsLoginModalOpen, isCartOpen, setIsCartOpen }) => {
                   <NavLink to="/profile" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
                     <i className="ri-user-line"></i> My Profile
                   </NavLink>
-                  <NavLink to="/mystore" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
-                    <i className="ri-store-line"></i> My Store
+                  <NavLink to="/assets" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
+                    <i className="ri-store-line"></i> My assets
                   </NavLink>
                   <NavLink to="/orderhistory" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
                     <i className="ri-file-list-3-line"></i> Order History
                   </NavLink>
                   <NavLink to="/settings" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
                     <i className="ri-settings-3-line"></i> Settings
-                  </NavLink>
-                  <NavLink to="/favorites" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
-                    <i className="ri-heart-3-line"></i> Favorites
                   </NavLink>
                   <NavLink to="/messages" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50" onClick={toggleDropdown}>
                     <i className="ri-message-3-line"></i> Messages

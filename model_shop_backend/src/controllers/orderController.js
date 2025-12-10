@@ -21,7 +21,7 @@ const getCsrfToken = async (req, res) => {
   }
 };
 
-// ============== TẠO ĐƠN HÀNG + TỰ ĐỘNG GỬI HÓA ĐƠN ==============
+// ============== TẠO ĐƠN HÀNG (ĐÃ HỖ TRỢ NFT) ==============
 const createOrder = async (req, res) => {
   const {
     csrf_token,
@@ -33,7 +33,8 @@ const createOrder = async (req, res) => {
     payment_method = 'cod',
     store_id,
     promotion_id,
-    session_key
+    session_key,
+    receive_nft = false // ← Mới: từ checkbox ở Checkout
   } = req.body;
 
   const user_id = req.session.user_id;
@@ -52,15 +53,19 @@ const createOrder = async (req, res) => {
     conn = await db.getConnection();
     await conn.query('START TRANSACTION');
 
-    // Xác định giỏ hàng (đăng nhập hoặc guest)
+    // Xác định giỏ hàng
     const identifier = user_id ? { field: 'user_id', value: user_id } : { field: 'session_key', value: session_key };
     if (!identifier.value) throw new Error('Không tìm thấy giỏ hàng');
 
-    // Lấy sản phẩm trong giỏ
+    // Lấy sản phẩm trong giỏ + description + ảnh NFT (nếu có)
     const [cartItems] = await conn.query(`
-      SELECT c.product_id, c.quantity, p.price, p.discount, p.name, p.stock_quantity
+      SELECT 
+        c.product_id, c.quantity, 
+        p.price, p.discount, p.name, p.description,
+        COALESCE(p.nft_image_url, pi.image_url) AS nft_image_url
       FROM carts c
       JOIN products p ON c.product_id = p.product_id
+      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
       WHERE c.${identifier.field} = ?
     `, [identifier.value]);
 
@@ -90,20 +95,20 @@ const createOrder = async (req, res) => {
       }
     }
 
-    // Phí ship
     const shipping_cost = shipping_method === 'fast' ? 50000 : shipping_method === 'express' ? 100000 : 30000;
     const final_amount = subtotal + shipping_cost;
 
     // Tạo mã đơn hàng
     const order_code = `ORD${Date.now().toString(36).toUpperCase()}${Math.floor(Math.random() * 999).toString().padStart(3, '0')}`;
 
-    // INSERT đơn hàng
+    // INSERT đơn hàng (có thêm receive_nft)
     await conn.query(`
       INSERT INTO orders (
         user_id, order_code, full_name, shipping_address, email, phone_number,
         shipping_method, shipping_cost, payment_method, store_id,
-        total_amount, discount_amount, final_amount, status, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')
+        total_amount, discount_amount, final_amount, status, payment_status,
+        receive_nft
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?)
     `, [
       user_id || null,
       order_code,
@@ -115,20 +120,34 @@ const createOrder = async (req, res) => {
       shipping_cost,
       payment_method,
       store_id || null,
-      subtotal + shipping_cost, // total_amount (bao gồm ship, trước giảm giá)
+      subtotal + shipping_cost,
       discount_amount,
-      final_amount
+      final_amount,
+      receive_nft ? 1 : 0
     ]);
 
     const [orderResult] = await conn.query('SELECT LAST_INSERT_ID() as order_id');
     const order_id = orderResult[0].order_id;
 
-    // Thêm chi tiết đơn hàng
+    // Thêm chi tiết đơn hàng + trả về order_detail_id
+    const orderDetails = [];
     for (const item of processedItems) {
-      await conn.query(
+      const [detailResult] = await conn.query(
         'INSERT INTO order_details (order_id, product_id, quantity, price_at_purchase) VALUES (?, ?, ?, ?)',
         [order_id, item.product_id, item.quantity, item.price_at_purchase]
       );
+      const order_detail_id = detailResult.insertId;
+
+      orderDetails.push({
+        order_detail_id,
+        product_id: item.product_id,
+        name: item.name,
+        quantity: item.quantity,
+        price_at_purchase: item.price_at_purchase,
+        description: item.description || 'No description',
+        image_url: item.nft_image_url || '/placeholder.jpg'
+      });
+
       // Giảm tồn kho
       await conn.query('UPDATE products SET stock_quantity = stock_quantity - ? WHERE product_id = ?', [item.quantity, item.product_id]);
     }
@@ -146,89 +165,36 @@ const createOrder = async (req, res) => {
 
     await conn.query('COMMIT');
 
-    // ================== TỰ ĐỘNG TẠO & GỬI HÓA ĐƠN ==================
-    const fullOrderData = {
-      order_id,
-      order_code,
-      full_name,
-      shipping_address: address,
-      email: guest_email || null,
-      phone_number: guest_phone || null,
-      total_amount: subtotal + shipping_cost,
-      discount_amount,
-      shipping_cost,
-      final_amount,
-      created_at: new Date(),
-      status: 'pending'
-    };
+    // === TẠO VÀ GỬI HÓA ĐƠN (background) ===
+    (async () => {
+      try {
+        const customerEmail = guest_email || (user_id ? (await conn.query('SELECT email FROM users WHERE user_id = ?', [user_id]))[0][0]?.email : null);
+        const currentOrder = (await conn.query('SELECT * FROM orders WHERE order_id = ?', [order_id]))[0][0];
 
-(async () => {
-  try {
-    // LẤY LẠI ĐƠN HÀNG ĐỂ CÓ EMAIL CHÍNH XÁC (từ user hoặc guest)
-    const [orderRows] = await conn.query(
-      `SELECT o.*, u.email as user_email 
-       FROM orders o 
-       LEFT JOIN users u ON o.user_id = u.user_id 
-       WHERE o.order_id = ?`,
-      [order_id]
-    );
+        const pdfBuffer = await generateInvoicePDFBuffer({ ...currentOrder, details: orderDetails });
+        const pdfFilename = `HOADON_${currentOrder.order_code}.pdf`;
+        fs.writeFileSync(path.join(__dirname, '../../invoices', pdfFilename), pdfBuffer);
 
-    if (!orderRows || orderRows.length === 0) {
-      console.error('Không tìm thấy đơn hàng sau khi tạo:', order_id);
-      return;
-    }
+        if (customerEmail && customerEmail.includes('@')) {
+          await sendInvoiceEmail(customerEmail.trim(), currentOrder, pdfBuffer);
+          console.log(`Đã gửi hóa đơn đến: ${customerEmail}`);
+        }
+      } catch (err) {
+        console.error('Lỗi tạo/gửi hóa đơn:', err);
+        await logError('Invoice error for order ' + order_code + ': ' + err.message);
+      }
+    })();
 
-    const currentOrder = orderRows[0];
-    const customerEmail = currentOrder.email || currentOrder.user_email;
-
-    // Tạo PDF
-    const pdfBuffer = await generateInvoicePDFBuffer({
-      ...fullOrderData,
-      full_name: currentOrder.full_name,
-      shipping_address: currentOrder.shipping_address,
-      phone_number: currentOrder.phone_number,
-      email: customerEmail,
-      order_code: currentOrder.order_code,
-      created_at: currentOrder.created_at
-    }, processedItems.map(i => ({
-      name: i.name,
-      quantity: i.quantity,
-      price_at_purchase: i.price_at_purchase
-    })));
-
-    // Lưu file PDF
-    const invoiceDir = path.resolve('./src/uploads/invoices');
-    if (!fs.existsSync(invoiceDir)) fs.mkdirSync(invoiceDir, { recursive: true });
-    const pdfFilename = `HOADON_${currentOrder.order_code}.pdf`;
-    fs.writeFileSync(path.join(invoiceDir, pdfFilename), pdfBuffer);
-
-    // GỬI EMAIL NẾU CÓ EMAIL HỢP LỆ
-    if (customerEmail && customerEmail.includes('@') && customerEmail.trim() !== '') {
-      await sendInvoiceEmail(customerEmail.trim(), {
-        ...currentOrder,
-        order_code: currentOrder.order_code,
-        final_amount: currentOrder.final_amount,
-        created_at: currentOrder.created_at
-      }, pdfBuffer);
-      
-      console.log(`Đã gửi hóa đơn đến: ${customerEmail}`);
-    } else {
-      console.log(`Không gửi email - Không có email hợp lệ cho đơn ${currentOrder.order_code}`);
-    }
-  } catch (err) {
-    console.error('Lỗi tạo/gửi hóa đơn:', err);
-    await logError('Invoice error for order ' + order_code + ': ' + err.message);
-  }
-})();
-
-    // Trả về ngay cho frontend
+    // Trả về dữ liệu đầy đủ cho frontend (quan trọng: có order_detail_id + receive_nft)
     return res.json({
       status: 'success',
-      message: 'Đặt hàng thành công! Hóa đơn sẽ được gửi qua email ngay lập tức.',
+      message: 'Đặt hàng thành công!',
       order_id,
       order_code,
       final_amount,
-      discount_amount
+      discount_amount,
+      receive_nft: receive_nft === true || receive_nft === 'true',
+      details: orderDetails // ← Cần để mint NFT từng sản phẩm
     });
 
   } catch (error) {
@@ -241,6 +207,95 @@ const createOrder = async (req, res) => {
   }
 };
 
+// ============== LƯU NFT MINT SAU KHI MINT THÀNH CÔNG ==============
+const saveNFTMint = async (req, res) => {
+  const {
+    order_id,
+    order_detail_id,
+    token_id,
+    tx_hash,
+    mint_address
+  } = req.body;
+
+  if (!order_id || !order_detail_id || !token_id || !tx_hash || !mint_address) {
+    return res.status(400).json({ status: 'error', message: 'Thiếu thông tin bắt buộc' });
+  }
+
+  let conn;
+  try {
+    conn = await db.getConnection();
+
+    // Kiểm tra đơn hàng tồn tại và thuộc về user (nếu có đăng nhập)
+    const [order] = await conn.query('SELECT user_id FROM orders WHERE order_id = ?', [order_id]);
+    if (!order.length) return res.status(404).json({ status: 'error', message: 'Đơn hàng không tồn tại' });
+
+    // Kiểm tra chưa mint rồi
+    const [existing] = await conn.query('SELECT mint_id FROM order_nft_mints WHERE order_detail_id = ?', [order_detail_id]);
+    if (existing.length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Sản phẩm này đã được mint NFT rồi' });
+    }
+
+    await conn.query(`
+      INSERT INTO order_nft_mints 
+        (order_id, order_detail_id, token_id, tx_hash, mint_address) 
+      VALUES (?, ?, ?, ?, ?)
+    `, [order_id, order_detail_id, token_id, tx_hash, mint_address]);
+
+    res.json({ status: 'success', message: 'NFT đã được lưu thành công!' });
+  } catch (error) {
+    await logError('saveNFTMint error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Lỗi server' });
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+// ============== LẤY ĐƠN HÀNG THEO MÃ (CÓ NFT INFO) ==============
+const getOrderByCode = async (req, res) => {
+  const { order_code } = req.params;
+  try {
+    const conn = await db.getConnection();
+
+    const [order] = await conn.query('SELECT * FROM orders WHERE order_code = ?', [order_code]);
+    if (!order.length) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+
+    const [details] = await conn.query(`
+      SELECT 
+        od.*, p.name, p.description,
+        pi.image_url AS main_image,
+        nft.token_id, nft.tx_hash, nft.minted_at
+      FROM order_details od
+      JOIN products p ON od.product_id = p.product_id
+      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
+      LEFT JOIN order_nft_mints nft ON od.order_detail_id = nft.order_detail_id
+      WHERE od.order_id = ?
+    `, [order[0].order_id]);
+
+    const [promotions] = await conn.query(`
+      SELECT p.*, op.applied_discount
+      FROM order_promotions op
+      JOIN promotions p ON op.promotion_id = p.promotion_id
+      WHERE op.order_id = ?
+    `, [order[0].order_id]);
+
+    conn.release();
+
+    res.json({
+      status: 'success',
+      order: {
+        ...order[0],
+        receive_nft: !!order[0].receive_nft,
+        details,
+        promotions: promotions.length > 0 ? promotions : null
+      }
+    });
+  } catch (error) {
+    await logError('getOrderByCode error: ' + error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Các hàm cũ giữ nguyên (nếu còn dùng)
 // ============== LẤY TRẠNG THÁI ĐƠN HÀNG ==============
 const getOrderStatus = async (req, res) => {
   const { order_code } = req.query;
@@ -316,50 +371,51 @@ const getOrderInvoice = async (req, res) => {
   }
 };
 
-// ============== LẤY ĐƠN HÀNG THEO MÃ (dùng cho trang /order/:code) ==============
-const getOrderByCode = async (req, res) => {
-  const { order_code } = req.params;
-  try {
-    const conn = await db.getConnection();
+// // ============== LẤY ĐƠN HÀNG THEO MÃ (dùng cho trang /order/:code) ==============
+// const getOrderByCode = async (req, res) => {
+//   const { order_code } = req.params;
+//   try {
+//     const conn = await db.getConnection();
 
-    const [order] = await conn.query('SELECT * FROM orders WHERE order_code = ?', [order_code]);
-    if (!order.length) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+//     const [order] = await conn.query('SELECT * FROM orders WHERE order_code = ?', [order_code]);
+//     if (!order.length) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
 
-    const [details] = await conn.query(`
-      SELECT od.*, p.name, pi.image_url AS main_image
-      FROM order_details od
-      JOIN products p ON od.product_id = p.product_id
-      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
-      WHERE od.order_id = ?
-    `, [order[0].order_id]);
+//     const [details] = await conn.query(`
+//       SELECT od.*, p.name, pi.image_url AS main_image
+//       FROM order_details od
+//       JOIN products p ON od.product_id = p.product_id
+//       LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
+//       WHERE od.order_id = ?
+//     `, [order[0].order_id]);
 
-    const [promotions] = await conn.query(`
-      SELECT p.*, op.applied_discount
-      FROM order_promotions op
-      JOIN promotions p ON op.promotion_id = p.promotion_id
-      WHERE op.order_id = ?
-    `, [order[0].order_id]);
+//     const [promotions] = await conn.query(`
+//       SELECT p.*, op.applied_discount
+//       FROM order_promotions op
+//       JOIN promotions p ON op.promotion_id = p.promotion_id
+//       WHERE op.order_id = ?
+//     `, [order[0].order_id]);
 
-    conn.release();
+//     conn.release();
 
-    res.json({
-      status: 'success',
-      order: {
-        ...order[0],
-        details,
-        promotions: promotions.length > 0 ? promotions : null
-      }
-    });
-  } catch (error) {
-    await logError('getOrderByCode error: ' + error.message);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+//     res.json({
+//       status: 'success',
+//       order: {
+//         ...order[0],
+//         details,
+//         promotions: promotions.length > 0 ? promotions : null
+//       }
+//     });
+//   } catch (error) {
+//     await logError('getOrderByCode error: ' + error.message);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
 
 module.exports = {
   getCsrfToken,
   createOrder,
+  saveNFTMint,        
   getOrderStatus,
   getOrderInvoice,
-  getOrderByCode
+  getOrderByCode      
 };
