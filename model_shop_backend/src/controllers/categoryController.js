@@ -3,18 +3,9 @@ const db = require('../config/db');
 const { logError } = require('../config/functions');
 
 const getCategoriesMana = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
+    pool = await db.getConnection();
 
     if (req.query.id) {
       const id = parseInt(req.query.id);
@@ -39,58 +30,52 @@ const getCategoriesMana = async (req, res) => {
   } catch (error) {
     await logError('Failed to fetch categories: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to fetch categories: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const addCategory = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const { name, description } = req.body;
     if (!name) {
       return res.status(400).json({ status: 'error', message: 'Name is required' });
+    }
+
+    const [existing] = await pool.query('SELECT category_id FROM categories WHERE name = ?', [name]);
+    if (existing.length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Category name already exists' });
     }
 
     const [result] = await pool.query(
       'INSERT INTO categories (name, description) VALUES (?, ?)',
       [name, description || '']
     );
-    res.json({ status: 'success', message: 'Category added', data: { category_id: result.insertId } });
+    res.json({ status: 'success', message: 'Category added', id: result.insertId });
   } catch (error) {
     await logError('Failed to add category: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to add category: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const updateCategory = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const id = parseInt(req.query.id);
     const { name, description } = req.body;
 
-    if (!name || id <= 0) {
+    if (!name || !id || id <= 0) {
       return res.status(400).json({ status: 'error', message: 'Invalid input' });
+    }
+
+    const [existing] = await pool.query('SELECT category_id FROM categories WHERE name = ? AND category_id != ?', [name, id]);
+    if (existing.length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Category name already exists' });
     }
 
     const [result] = await pool.query(
@@ -105,23 +90,15 @@ const updateCategory = async (req, res) => {
   } catch (error) {
     await logError('Failed to update category: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to update category: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const deleteCategory = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const id = parseInt(req.query.id);
     if (id <= 0) {
       return res.status(400).json({ status: 'error', message: 'Invalid category ID' });
@@ -136,6 +113,8 @@ const deleteCategory = async (req, res) => {
   } catch (error) {
     await logError('Failed to delete category: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to delete category: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 

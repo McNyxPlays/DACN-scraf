@@ -18,22 +18,19 @@ function ReceivedNFTsTab({ wallet }) {
 
     const fetchReceivedNFTs = async () => {
       setLoading(true);
+      setError("");
       try {
-        const response = await api.get("/user/nfts/received", {
-          params: { mint_address: wallet },
-        });
-        if (response.data.status === "success") {
-          setNfts(response.data.nfts || []);
-          setError("");
+        const res = await api.get('/order-nft-mints?wallet=' + wallet);
+        console.log('Received NFTs response:', res.data);
+
+        if (res.data.success) {
+          setNfts(res.data.data || []);
         } else {
-          setError(response.data.message || "Unknown error");
-          Toastify.error(response.data.message || "Unknown error");
+          setError(res.data.message || 'Failed to load received NFTs');
         }
       } catch (err) {
-        const errorMsg = err.response?.data?.message || err.message || "Network or server error";
-        setError(errorMsg);
-        Toastify.error(errorMsg);
-        setNfts([]);
+        setError(err.response?.data?.message || 'Error loading received NFTs');
+        console.error('fetchReceivedNFTs error:', err);
       } finally {
         setLoading(false);
       }
@@ -42,13 +39,8 @@ function ReceivedNFTsTab({ wallet }) {
     fetchReceivedNFTs();
   }, [wallet]);
 
-  if (loading) {
-    return <div className="text-center py-12">Loading received NFTs...</div>;
-  }
-
-  if (error) {
-    return <p className="text-red-500 text-center py-12">{error}</p>;
-  }
+  if (loading) return <p className="text-center py-12 text-gray-500">Loading received NFTs...</p>;
+  if (error) return <p className="text-red-500 text-center py-12">{error}</p>;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
@@ -57,7 +49,7 @@ function ReceivedNFTsTab({ wallet }) {
           <AssetItem
             key={nft.mint_id}
             item={nft}
-            type="nft-received"
+            type="nft-purchased" 
           />
         ))
       ) : (

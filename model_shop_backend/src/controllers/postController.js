@@ -160,7 +160,6 @@ const deletePost = async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Not owner' });
     }
 
-    // Delete images
     const [images] = await conn.query('SELECT image_url FROM post_images WHERE post_id = ?', [post_id]);
     for (let img of images) {
       try {

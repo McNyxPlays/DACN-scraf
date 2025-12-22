@@ -1,4 +1,5 @@
 // src/features/Cart/CartItem.jsx
+// Component hiển thị từng item trong giỏ hàng, hỗ trợ toggle "Receive as NFT" per item
 import React from "react";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import api from "../../api/index";
@@ -17,6 +18,7 @@ function CartItem({ item, exchangeRate, onUpdate }) {
 
   const displayPrice = priceAfterDiscount * exchangeRate;
 
+  // Cập nhật số lượng
   const handleQuantityChange = async (newQty) => {
     if (newQty < 1) return;
 
@@ -31,7 +33,23 @@ function CartItem({ item, exchangeRate, onUpdate }) {
     }
   };
 
-  // Thay confirm bằng SweetAlert2
+  // Toggle lựa chọn nhận NFT
+  const handleToggleNFT = async () => {
+    const newReceiveNFT = item.receive_nft ? 0 : 1;
+
+    try {
+      const data = { cart_id: item.cart_id, receive_nft: newReceiveNFT };
+      if (!user?.user_id) data.session_key = sessionKey;
+
+      await api.put("/cart", data);
+      onUpdate?.();
+      Toastify.success(newReceiveNFT ? "Will receive as NFT" : "NFT option removed");
+    } catch (err) {
+      Toastify.error(err.response?.data?.message || "Failed to update NFT option");
+    }
+  };
+
+  // Xóa item với confirm SweetAlert2
   const handleRemove = async () => {
     const result = await Swal.fire({
       title: "Remove Item",
@@ -87,6 +105,25 @@ function CartItem({ item, exchangeRate, onUpdate }) {
         <p className="text-xs text-gray-500 mt-1">
           {item.quantity} × product
         </p>
+
+        {/* Checkbox Receive as NFT - chỉ hiển thị nếu sản phẩm hỗ trợ */}
+        {item.is_nft_eligible === 1 && (
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id={`nft-${item.cart_id}`}
+              checked={!!item.receive_nft}
+              onChange={handleToggleNFT}
+              className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+            />
+            <label
+              htmlFor={`nft-${item.cart_id}`}
+              className="text-sm text-gray-700 cursor-pointer select-none"
+            >
+              Receive as NFT
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col justify-between items-end">

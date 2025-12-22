@@ -11,7 +11,6 @@ const wallet = new ethers.Wallet(
   provider
 );
 
-// ABI ĐÚNG 100% VỚI CONTRACT BẠN ĐÃ DEPLOY
 const abi = [
   "function mint(address to, string memory uri, uint96 royaltyBps, uint256 maxSupply) external returns (uint256)",
   "function mintMore(uint256 tokenId, address to) external",

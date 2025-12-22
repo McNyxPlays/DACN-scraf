@@ -35,13 +35,21 @@ class PromotionModel {
     }
   }
 
-  static async findAll(search = '%') {
+  static async findAll({ search = '', status = '' }) {
     try {
       const pool = await db.getConnection();
-      const [rows] = await pool.query(
-        'SELECT promotion_id, name, code, discount_percentage, start_date, end_date, status, usage_count, is_active FROM promotions WHERE name LIKE ? OR code LIKE ?',
-        [search, search]
-      );
+      let query = 'SELECT promotion_id, name, code, discount_percentage, start_date, end_date, status, usage_count, is_active FROM promotions WHERE 1=1';
+      const params = [];
+      if (search) {
+        query += ' AND (name LIKE ? OR code LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`);
+      }
+      if (status) {
+        query += ' AND status = ?';
+        params.push(status);
+      }
+      query += ' ORDER BY created_at DESC';
+      const [rows] = await pool.query(query, params);
       return rows;
     } catch (error) {
       await logError(`Failed to fetch promotions: ${error.message}`);
@@ -49,13 +57,12 @@ class PromotionModel {
     }
   }
 
-  static async create({ name, code, discount_percentage, start_date, end_date, max_usage, status, is_active = true }) {
+  static async create({ name, code, discount_percentage, start_date, end_date = null, status = 'active', usage_count = 0, is_active = true }) {
     try {
       const pool = await db.getConnection();
       const [result] = await pool.query(
-        `INSERT INTO promotions (name, code, discount_percentage, start_date, end_date, max_usage, status, usage_count, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-        [name, code, discount_percentage, start_date, end_date || null, max_usage || null, status, is_active]
+        'INSERT INTO promotions (name, code, discount_percentage, start_date, end_date, status, usage_count, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [name, code, discount_percentage, start_date, end_date, status, usage_count, is_active]
       );
       return result.insertId;
     } catch (error) {
@@ -68,8 +75,7 @@ class PromotionModel {
     try {
       const pool = await db.getConnection();
       const [result] = await pool.query(
-        `UPDATE promotions
-         SET name = ?, code = ?, discount_percentage = ?, start_date = ?, end_date = ?, status = ?, usage_count = ?, is_active = ?
+        `UPDATE promotions SET name = ?, code = ?, discount_percentage = ?, start_date = ?, end_date = ?, status = ?, usage_count = ?, is_active = ?
          WHERE promotion_id = ?`,
         [name, code, discount_percentage, start_date, end_date || null, status, usage_count || 0, is_active, id]
       );

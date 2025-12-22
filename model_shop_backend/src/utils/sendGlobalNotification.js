@@ -15,26 +15,17 @@ const sendGlobalNotification = async (message, type = 'events', link = null) => 
        VALUES (NULL, NULL, ?, ?, ?, 1, NOW())`,
       [message, link, type]
     );
-
     const notificationId = result.insertId;
 
-    // Lấy io từ app
-    const io = require('../app').get('io');
+    // Emit global (đã xử lý cache trong emitGlobal)
+    emitGlobal(global.io, { notification_id: notificationId, message, type, link, is_global: 1 });
 
-    // Emit realtime global
-    await emitGlobal(io, {
-      notification_id: notificationId,
-      message,
-      link,
-      type,
-      created_at: new Date().toISOString(),
-      is_global: 1
-    });
-
-    // Xóa cache (đã tích hợp trong emitGlobal, nhưng giữ fallback)
-    const keys = await redisClient.keys('notification_count_*');
-    if (keys.length > 0) {
-      await redisClient.del(...keys);
+    // Xóa cache fallback (nếu Redis thật)
+    if (redisClient && redisClient.keys) {
+      const keys = await redisClient.keys('notification_count_*');
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+      }
     }
 
     console.log(`Global notification sent! ID: ${notificationId} – "${message}"`);

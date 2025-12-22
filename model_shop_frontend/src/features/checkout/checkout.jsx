@@ -17,7 +17,7 @@ export default function Checkout() {
   const [guestPhone, setGuestPhone] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [promotionId, setPromotionId] = useState(null);
-  const [discountUSD, setDiscountUSD] = useState(0); // lưu USD
+  const [discountUSD, setDiscountUSD] = useState(0);
   const [csrfToken, setCsrfToken] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cod");
 
@@ -26,7 +26,7 @@ export default function Checkout() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Auto-fill nếu đã đăng nhập
+  // Auto-fill fields for logged-in users
   useEffect(() => {
     if (user) {
       setFullName(user.full_name || "");
@@ -36,7 +36,7 @@ export default function Checkout() {
     }
   }, [user]);
 
-  // Load CSRF + giỏ hàng
+  // Load CSRF token and cart items on mount
   useEffect(() => {
     const init = async () => {
       await fetchCsrfToken();
@@ -68,7 +68,7 @@ export default function Checkout() {
     }
   };
 
-  // === TÍNH TOÁN GIÁ (USD) ===
+  // Calculate prices in USD
   const subtotalUSD = cartItems.reduce((sum, item) => {
     const price = item.discount > 0
       ? item.price * (1 - item.discount / 100)
@@ -78,10 +78,10 @@ export default function Checkout() {
 
   const totalUSD = subtotalUSD - discountUSD;
 
-  // Dùng VND để gửi promo (backend yêu cầu VND)
+  // Subtotal in VND (for backend promo validation)
   const subtotalVND = subtotalUSD * 25000;
 
-  // === ÁP DỤNG MÃ GIẢM GIÁ ===
+  // Apply promo code
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) {
       return Toastify.error("Please enter promo code");
@@ -95,7 +95,7 @@ export default function Checkout() {
       );
 
       const discountVND = res.data.discount || 0;
-      setDiscountUSD(discountVND / 25000); // chuyển về USD để tính tổng
+      setDiscountUSD(discountVND / 25000);
       setPromotionId(res.data.promotion_id);
       Toastify.success(`Promo applied! -${formatCurrency(discountVND / 25000)}`);
     } catch (err) {
@@ -105,54 +105,65 @@ export default function Checkout() {
     }
   };
 
-  // === ĐẶT HÀNG ===
+  // Place order
   const handleSubmitOrder = async () => {
     if (!fullName.trim() || !address.trim()) {
       return Toastify.error("Please enter your full name and address");
     }
 
     try {
-      const response = await api.post("/orders", {
+      const params = {
         csrf_token: csrfToken,
         full_name: fullName,
         address,
-        guest_email: guestEmail.trim() || null,  // Không bắt buộc, gửi null nếu rỗng
-        guest_phone: guestPhone || null,
-        promotion_id: promotionId || null,
-        session_key: user ? null : sessionKey,
-      });
-
-      const orderData = {
-        ...response.data,
-        full_name: fullName,
-        shipping_address: address,
-        email: guestEmail.trim() || user?.email || null,
-        phone_number: guestPhone || user?.phone_number,
-        total_amount: totalUSD * 25000,
-        discount_amount: discountUSD * 25000,
-        shipping_cost: 0,
+        guest_email: guestEmail,
+        guest_phone: guestPhone,
+        shipping_method: "standard",
+        payment_method: paymentMethod,
+        store_id: null,
+        promotion_id: promotionId,
+        session_key: sessionKey,
       };
 
-      dispatch(setLastOrder(orderData));
-      navigate("/order-success", { state: { order: orderData } });
+      const res = await api.post("/orders", params);
+
+      if (res.data.status === "success") {
+        dispatch(setLastOrder(res.data.order_code));
+        Toastify.success("Order placed successfully!");
+        // Redirect to success page with order code as query param
+        navigate(`/order-success?order_code=${res.data.order_code}`);
+      }
     } catch (err) {
-      Toastify.error(err.response?.data?.message || "Order failed");
+      console.error("Order placement error:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        (err.response?.status === 403 ? "Invalid CSRF token - please refresh the page" : err.message) ||
+        "Failed to place order. Please try again.";
+
+      Toastify.error(errorMessage);
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-2xl">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-2xl font-medium">Loading checkout...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-3 gap-8">
+    <div className="container mx-auto px-4 py-12 max-w-7xl">
+      <h1 className="text-4xl font-bold mb-12 text-center">Checkout</h1>
 
-        {/* === LEFT: CHECKOUT FORM === */}
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* Left column: Shipping info, Payment, Promo */}
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-8 rounded-2xl shadow-lg">
-            <h2 className="text-3xl font-bold mb-8">Shipping Information</h2>
-            <div className="grid md:grid-cols-2 gap-6">
+          {/* Shipping Information */}
+          <div className="bg-white p-6 rounded-2xl shadow">
+            <h3 className="text-xl font-bold mb-4">Shipping Information</h3>
+            <div className="grid md:grid-cols-2 gap-4">
               <input
-                type="text"
                 placeholder="Full Name *"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -160,38 +171,42 @@ export default function Checkout() {
                 required
               />
               <input
-                type="text"
+                placeholder="Address *"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="px-5 py-3 border rounded-lg"
+                required
+              />
+              <input
+                placeholder="Email (for invoice)"
+                value={guestEmail}
+                onChange={(e) => setGuestEmail(e.target.value)}
+                className="px-5 py-3 border rounded-lg"
+              />
+              <input
                 placeholder="Phone Number"
                 value={guestPhone}
                 onChange={(e) => setGuestPhone(e.target.value)}
                 className="px-5 py-3 border rounded-lg"
               />
-              <input
-                type="text"
-                placeholder="Shipping Address *"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="md:col-span-2 px-5 py-3 border rounded-lg"
-                required
-              />
-              {!user && (
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div className="bg-white p-6 rounded-2xl shadow">
+            <h3 className="text-xl font-bold mb-4">Payment Method</h3>
+            <div className="space-y-3">
+              <label className="flex items-center gap-3">
                 <input
-                  type="email"
-                  placeholder="Email (optional, for invoice)"
-                  value={guestEmail}
-                  onChange={(e) => setGuestEmail(e.target.value)}
-                  className="md:col-span-2 px-5 py-3 border rounded-lg"
+                  type="radio"
+                  value="cod"
+                  checked={paymentMethod === "cod"}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="form-radio"
                 />
-              )}
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="md:col-span-2 px-5 py-3 border rounded-lg"
-              >
-                <option value="cod">Cash on Delivery (COD)</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="vnpay">VNPay</option>
-              </select>
+                <span>Cash on Delivery</span>
+              </label>
+              {/* Add other payment methods here if needed */}
             </div>
           </div>
 
@@ -216,7 +231,7 @@ export default function Checkout() {
           </div>
         </div>
 
-        {/* === RIGHT: ORDER SUMMARY === */}
+        {/* Right column: Order Summary */}
         <div className="lg:col-span-1">
           <div className="bg-white p-8 rounded-2xl shadow sticky top-6">
             <h2 className="text-2xl font-bold mb-8">Order Summary</h2>
@@ -237,6 +252,11 @@ export default function Checkout() {
                     <div className="flex-1">
                       <h4 className="font-medium line-clamp-2">{item.name}</h4>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                      {item.is_nft_eligible === 1 && (
+                        <p className="text-sm text-gray-600">
+                          NFT: {item.receive_nft ? "Yes" : "No"}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-blue-600">

@@ -1,7 +1,11 @@
+// model_shop_frontend/src/features/Admin/Catalog/Categories.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api/index";
+import { FaSearch } from "react-icons/fa";
+import { Toastify } from "../../../components/Toastify";
+import { useNavigate } from "react-router-dom";
 
-const CategoriesManagement = () => {
+const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -14,20 +18,19 @@ const CategoriesManagement = () => {
   });
   const [editCategoryId, setEditCategoryId] = useState(null);
 
+  const navigate = useNavigate();
+
   useEffect(() => {
     fetchCategories();
-  }, [search]);
+  }, []);
 
   const fetchCategories = async () => {
     try {
       setLoading(true);
       setError("");
-      const params = { search };
-      const response = await api.get("/categories", { params });
-      if (
-        response.data.status === "success" &&
-        Array.isArray(response.data.data)
-      ) {
+      const params = search ? { search } : {};
+      const response = await api.get("/categories/mana", { params });
+      if (response.data.status === "success" && Array.isArray(response.data.data)) {
         setCategories(response.data.data);
         setError("");
       } else {
@@ -36,18 +39,10 @@ const CategoriesManagement = () => {
       }
     } catch (err) {
       setCategories([]);
-      if (err.response) {
-        if (err.response.status === 403) {
-          setError("You do not have permission to access this page.");
-        } else if (err.response.data && err.response.data.message) {
-          setError(err.response.data.message);
-        } else {
-          setError("Failed to fetch categories");
-        }
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
       } else {
-        setError(
-          "Failed to fetch categories: " + (err.message || "Unknown error")
-        );
+        setError("Failed to fetch categories: " + (err.message || "Unknown error"));
       }
       console.error(err);
     } finally {
@@ -83,101 +78,122 @@ const CategoriesManagement = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      let response;
       if (modalMode === "add") {
-        response = await api.post("/categories", formData);
+        const response = await api.post("/categories/mana", formData);
+        if (response.data.status === "success") {
+          Toastify.success("Category added successfully");
+          closeModal();
+          fetchCategories();
+        } else {
+          setError(response.data.message || "Failed to add category");
+        }
       } else {
-        response = await api.put(`/categories?id=${editCategoryId}`, formData);
-      }
-      if (response.data.status === "success") {
-        fetchCategories();
-        closeModal();
-      } else {
-        setError(response.data.message || "Failed to save category");
+        const response = await api.put(`/categories/mana?id=${editCategoryId}`, formData);
+        if (response.data.status === "success") {
+          Toastify.success("Category updated successfully");
+          closeModal();
+          fetchCategories();
+        } else {
+          setError(response.data.message || "Failed to update category");
+        }
       }
     } catch (err) {
-      if (err.response && err.response.data.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Failed to save category");
-      }
+      setError(err.response?.data?.message || "An error occurred");
       console.error(err);
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this category?")) {
-      try {
-        const response = await api.delete(`/categories?id=${id}`);
-        if (response.data.status === "success") {
-          fetchCategories();
-        } else {
-          setError(response.data.message || "Failed to delete category");
-        }
-      } catch (err) {
-        setError("Failed to delete category");
-        console.error(err);
+    if (!window.confirm("Are you sure you want to delete this category?")) return;
+    try {
+      const response = await api.delete(`/categories/mana?id=${id}`);
+      if (response.data.status === "success") {
+        Toastify.success("Category deleted successfully");
+        fetchCategories();
+      } else {
+        setError(response.data.message || "Failed to delete category");
       }
+    } catch (err) {
+      setError(err.response?.data?.message || "An error occurred");
+      console.error(err);
     }
   };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    fetchCategories();
+  };
+
+  if (loading) return <p className="text-center text-gray-500">Loading...</p>;
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Categories Management</h1>
-        <button
-          onClick={openAddModal}
-          className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
-        >
-          Add New Category
+        <h1 className="text-2xl font-bold">Manage Categories</h1>
+        <div className="flex gap-4">
+          <button
+            onClick={() => navigate('/admin')}
+            className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+          >
+            Back to Dashboard
+          </button>
+          <button
+            onClick={openAddModal}
+            className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark"
+          >
+            Add Category
+          </button>
+        </div>
+      </div>
+      <form onSubmit={handleSearchSubmit} className="mb-6 flex gap-4">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name..."
+            className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <FaSearch className="absolute top-3 right-3 text-gray-500" />
+        </div>
+        <button type="submit" className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark">
+          Search
         </button>
-      </div>
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Search categories..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </div>
-      {loading ? (
-        <div className="text-center py-4">Loading...</div>
-      ) : error ? (
-        <p className="text-red-500 mb-4">{error}</p>
-      ) : categories.length === 0 ? (
-        <div className="text-center py-4">No categories found.</div>
+      </form>
+      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {categories.length === 0 ? (
+        <p className="text-center text-gray-500">No categories found</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white rounded-lg shadow-md">
+          <table className="min-w-full bg-white border border-gray-300">
             <thead>
-              <tr className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                <th className="py-3 px-6 text-left">Name</th>
-                <th className="py-3 px-6 text-left">Description</th>
-                <th className="py-3 px-6 text-center">Actions</th>
+              <tr>
+                <th className="px-4 py-2 border-b text-left">Name</th>
+                <th className="px-4 py-2 border-b text-left">Description</th>
+                <th className="px-4 py-2 border-b text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-gray-600 text-sm font-light">
+            <tbody>
               {categories.map((category) => (
-                <tr key={category.category_id} className="border-b border-gray-200 hover:bg-gray-100">
-                  <td className="py-3 px-6">{category.name}</td>
-                  <td className="py-3 px-6">{category.description || "No description"}</td>
-                  <td className="py-3 px-6 flex justify-center gap-2">
+                <tr key={category.category_id}>
+                  <td className="px-4 py-2 border-b">{category.name}</td>
+                  <td className="px-4 py-2 border-b">{category.description}</td>
+                  <td className="px-4 py-2 border-b text-center">
                     <button
                       onClick={() => openEditModal(category)}
-                      className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600"
+                      className="text-blue-500 hover:text-blue-700 mr-2"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(category.category_id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600"
+                      className="text-red-500 hover:text-red-700"
                     >
                       Delete
                     </button>
@@ -241,4 +257,4 @@ const CategoriesManagement = () => {
   );
 };
 
-export default CategoriesManagement;
+export default Categories;

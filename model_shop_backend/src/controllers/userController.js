@@ -233,29 +233,32 @@ const getCreatedNFTs = async (req, res) => {
   let conn;
   try {
     conn = await db.getConnection();
-    const [nfts] = await conn.query(`
+    const [nfts] = await conn.query(
+      `
       SELECT 
         mint_id, token_id, design_id, tx_hash, nft_metadata_url, nft_image_url,
-        price, royalty_percent, max_supply, minted_at
+        name, description, royalty_percent, max_supply, minted_at
       FROM user_nft_mints 
       WHERE user_id = ?
       ORDER BY minted_at DESC
-    `, [user_id]);
+    `,
+      [user_id]
+    );
 
-    res.json({ 
-      status: 'success', 
-      nfts: nfts.map(nft => ({
+    res.json({
+      status: 'success',
+      nfts: nfts.map((nft) => ({
         mint_id: nft.mint_id,
         token_id: nft.token_id,
         design_id: nft.design_id,
         tx_hash: nft.tx_hash,
         nft_image_url: nft.nft_image_url,
         nft_metadata_url: nft.nft_metadata_url,
-        name: `NFT #${nft.token_id}`,
-        price: nft.price || 0,
+        name: nft.name || `NFT #${nft.token_id}`, 
+        description: nft.description || '', 
         royalty_percent: nft.royalty_percent || 0,
         max_supply: nft.max_supply || 0,
-      }))
+      })),
     });
   } catch (error) {
     await logError('getCreatedNFTs error: ' + error.message);

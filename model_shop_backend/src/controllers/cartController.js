@@ -1,7 +1,6 @@
 // src/controllers/cartController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
-const app = require('../app');
 const redisClient = require('../config/redis');
 
 
@@ -91,7 +90,6 @@ const getCart = async (req, res) => {
 
     const [cart] = await conn.query(sql, [user_id || session_key]);
 
-    // Cache count (tùy chọn)
     const count = cart.length;
     const cacheKey = user_id ? `cart_count_${user_id}` : `cart_count_guest_${session_key}`;
     redisClient.set(cacheKey, count, { EX: 60 });

@@ -2,141 +2,87 @@
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 const redisClient = require('../config/redis');
+const { sendGlobalNotification } = require('../utils/sendGlobalNotification');
+const { emitGlobal, emitToTarget } = require('../utils/emitNotification');
 
-// Helper lấy identifier (user hoặc guest) – SỬA: Ưu tiên query params trước session
 const getIdentifier = (req) => {
-  // 1. Ưu tiên: đã login → dùng user_id từ session
   if (req.session.user_id) {
     return { user_id: req.session.user_id, session_key: null };
   }
 
-  // 2. Guest: lấy session_key từ query → lưu vào session để dùng lại
   let session_key = req.query.session_key || req.body.session_key;
 
-  // Nếu có truyền lên → lưu vào session để các request sau không cần truyền nữa
   if (session_key && !req.session.session_key) {
     req.session.session_key = session_key;
   }
 
-  // Dùng cái đã lưu trong session (nếu đã có từ lần trước)
   session_key = req.session.session_key || session_key;
 
   return { user_id: null, session_key };
 };
 
-// Phần còn lại giữ nguyên (getNotifications, markNotificationsRead, getNotificationCount)
 const getNotifications = async (req, res) => {
-  const { user_id, session_key } = getIdentifier(req);
-  if (!user_id && !session_key) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
-
-  const identifier = user_id || session_key;
-  const idType = user_id ? 'user_id' : 'session_key';
-
-  const page = parseInt(req.query.page) || 1;
-  const perPage = parseInt(req.query.perPage) || 10;
-  const filter = req.query.filter || 'all';
-  const typeFilter = req.query.type || 'all';
+  const { identifier, session_key } = getIdentifier(req);
+  const idType = identifier ? 'user_id' : 'session_key';
 
   let conn;
   try {
     conn = await db.getConnection();
-
-    let query = `SELECT notification_id, type, message, link, data, is_global, is_read, read_at, created_at 
-                 FROM notifications WHERE (${idType} = ? OR is_global = 1)`;
-    let params = [identifier];
-
-    if (filter === 'unread') query += ' AND is_read = 0';
-    if (filter === 'read') query += ' AND is_read = 1';
-    if (typeFilter !== 'all') {
-      query += ' AND type = ?';
-      params.push(typeFilter);
-    }
-
-    query += ' ORDER BY is_global DESC, created_at DESC LIMIT ?, ?';
-    params.push((page - 1) * perPage, perPage);
-
-    const [notifications] = await conn.query(query, params);
-
-    let totalQuery = `SELECT COUNT(*) as total FROM notifications WHERE (${idType} = ? OR is_global = 1)`;
-    let totalParams = [identifier];
-    if (filter === 'unread') totalQuery += ' AND is_read = 0';
-    if (filter === 'read') totalQuery += ' AND is_read = 1';
-    if (typeFilter !== 'all') {
-      totalQuery += ' AND type = ?';
-      totalParams.push(typeFilter);
-    }
-
-    const [total] = await conn.query(totalQuery, totalParams);
-    const totalPages = Math.ceil(total[0].total / perPage);
-
-    res.json({ success: true, notifications, totalPages });
+    const [rows] = await conn.query(
+      `SELECT notification_id, message, link, type, is_read, created_at 
+       FROM notifications 
+       WHERE (${idType} = ? OR is_global = 1) 
+       ORDER BY created_at DESC 
+       LIMIT 20`,
+      [identifier || session_key]
+    );
+    res.json({ status: 'success', data: rows });
   } catch (error) {
     await logError('getNotifications error: ' + error.message);
-    res.status(500).json({ success: false, error: 'Failed' });
+    res.status(500).json({ status: 'error', message: 'Failed to fetch notifications' });
   } finally {
     if (conn) conn.release();
   }
 };
 
 const markNotificationsRead = async (req, res) => {
-  const { user_id, session_key } = getIdentifier(req);
-  if (!user_id && !session_key) {
-    return res.status(403).json({ success: false, error: 'Unauthorized' });
-  }
-
-  const { notification_ids } = req.body;
-  const identifier = user_id || session_key;
-  const idType = user_id ? 'user_id' : 'session_key';
-  const cacheKey = user_id ? `notification_count_${user_id}` : `notification_count_guest_${session_key}`;
+  const { notification_ids = 'all' } = req.body;
+  const { identifier, session_key } = getIdentifier(req);
+  const idType = identifier ? 'user_id' : 'session_key';
 
   let conn;
   try {
     conn = await db.getConnection();
-    let sql = `UPDATE notifications SET is_read = 1, read_at = NOW() WHERE (${idType} = ? OR is_global = 1)`;
-    let params = [identifier];
+    let query = `UPDATE notifications SET is_read = 1 WHERE (${idType} = ? OR is_global = 1)`;
+    let params = [identifier || session_key];
 
     if (notification_ids !== 'all') {
-      if (!Array.isArray(notification_ids) || notification_ids.length === 0) {
-        return res.status(400).json({ success: false, error: 'Invalid ids' });
-      }
       const placeholders = notification_ids.map(() => '?').join(',');
-      sql += ` AND notification_id IN (${placeholders})`;
-      params = [identifier, ...notification_ids];  // SỬA: Đặt identifier cuối cùng để tránh conflict với IN clause
+      query += ` AND notification_id IN (${placeholders})`;
+      params = [...notification_ids, ...params];
     }
 
-    await conn.query(sql, params);
-    await redisClient.del(cacheKey);
-
-    // Emit realtime update count sau mark read
-    const io = require('../app').get('io');
-    const { emitToTarget } = require('../utils/emitNotification');
-    await emitToTarget(io, identifier, user_id ? 'user' : 'guest', {});
-
-    res.json({ success: true, message: 'Marked as read' });
-  } catch (err) {
-    await logError('markNotificationsRead: ' + err.message);
-    res.status(500).json({ success: false, error: 'Server error' });
+    const [result] = await conn.query(query, params);
+    res.json({ status: 'success', marked: result.affectedRows });
+  } catch (error) {
+    await logError('markNotificationsRead error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to mark as read' });
   } finally {
     if (conn) conn.release();
   }
 };
 
 const getNotificationCount = async (req, res) => {
-  const { user_id, session_key } = getIdentifier(req); 
-  if (!user_id && !session_key) return res.status(401).json({ count: 0 });
-
-  const identifier = user_id || session_key;
-  const idType = user_id ? 'user_id' : 'session_key';
-  const cacheKey = user_id ? `notification_count_${user_id}` : `notification_count_guest_${session_key}`;
+  const { identifier, session_key } = getIdentifier(req);
+  const idType = identifier ? 'user_id' : 'session_key';
+  const cacheKey = identifier ? `notification_count_${identifier}` : `notification_count_guest_${session_key}`;
 
   let count = await redisClient.get(cacheKey);
   if (count === null) {
     const conn = await db.getConnection();
     const [rows] = await conn.query(
       `SELECT COUNT(*) AS cnt FROM notifications WHERE (${idType} = ? OR is_global = 1) AND is_read = 0`,
-      [identifier]
+      [identifier || session_key]
     );
     count = rows[0].cnt;
     await redisClient.set(cacheKey, count, { EX: 60 });
@@ -147,4 +93,42 @@ const getNotificationCount = async (req, res) => {
   res.json({ count });
 };
 
-module.exports = { getNotifications, markNotificationsRead, getNotificationCount };
+// New: Send notification (individual or global)
+const sendNotification = async (req, res) => {
+  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+
+  let conn;
+  try {
+    conn = await db.getConnection();
+    const [userRows] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
+    const user = userRows[0];
+    if (!user || user.role !== 'admin') return res.status(403).json({ status: 'error', message: 'Not admin' });
+
+    const { message, type = 'events', link = null, user_id = null, is_global = false } = req.body;
+    if (!message) return res.status(400).json({ status: 'error', message: 'Message required' });
+
+    if (is_global) {
+      const { success } = await sendGlobalNotification(message, type, link);
+      if (success) {
+        res.json({ status: 'success', message: 'Global notification sent' });
+      } else {
+        res.status(500).json({ status: 'error', message: 'Failed to send global notification' });
+      }
+    } else {
+      if (!user_id) return res.status(400).json({ status: 'error', message: 'User ID required for individual notification' });
+      const [result] = await conn.query(
+        `INSERT INTO notifications (user_id, message, link, type, created_at) VALUES (?, ?, ?, ?, NOW())`,
+        [user_id, message, link, type]
+      );
+      await emitToTarget(null, user_id, 'user', { notification_id: result.insertId, message, type, link });
+      res.json({ status: 'success', notification_id: result.insertId });
+    }
+  } catch (error) {
+    await logError('sendNotification error: ' + error.message);
+    res.status(500).json({ status: 'error', message: 'Failed to send notification' });
+  } finally {
+    if (conn) conn.release();
+  }
+};
+
+module.exports = { getNotifications, markNotificationsRead, getNotificationCount, sendNotification };

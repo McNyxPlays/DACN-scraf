@@ -1,20 +1,11 @@
-// src/controllers/authController.js
+// src/controllers/brandController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 
 const getBrandsMana = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
+    pool = await db.getConnection();
 
     if (req.query.id) {
       const id = parseInt(req.query.id);
@@ -37,64 +28,55 @@ const getBrandsMana = async (req, res) => {
       res.json({ status: 'success', data: brands });
     }
   } catch (error) {
+    console.error('Error in getBrandsMana:', error.stack);
     await logError('Failed to fetch brands: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to fetch brands: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const addBrand = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const { name, description } = req.body;
     if (!name) {
       return res.status(400).json({ status: 'error', message: 'Name is required' });
+    }
+
+    const [existing] = await pool.query('SELECT brand_id FROM brands WHERE name = ?', [name]);
+    if (existing.length > 0) {
+      return res.status(400).json({ status: 'error', message: 'Brand name already exists' });
     }
 
     const [result] = await pool.query(
       'INSERT INTO brands (name, description) VALUES (?, ?)',
       [name, description || '']
     );
-    res.json({ status: 'success', message: 'Brand added', data: { brand_id: result.insertId } });
+    res.json({ status: 'success', message: 'Brand added', id: result.insertId });
   } catch (error) {
+    console.error('Error in addBrand:', error.stack);
     await logError('Failed to add brand: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to add brand: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const updateBrand = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const id = parseInt(req.query.id);
     const { name, description } = req.body;
 
-    if (!name || id <= 0) {
+    if (!name || !id || id <= 0) {
       return res.status(400).json({ status: 'error', message: 'Invalid input' });
     }
 
-    const [existingBrand] = await pool.query('SELECT brand_id FROM brands WHERE name = ? AND brand_id != ?', [name, id]);
-    if (existingBrand.length) {
+    const [existing] = await pool.query('SELECT brand_id FROM brands WHERE name = ? AND brand_id != ?', [name, id]);
+    if (existing.length > 0) {
       return res.status(400).json({ status: 'error', message: 'Brand name already exists' });
     }
 
@@ -108,25 +90,18 @@ const updateBrand = async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Brand not found' });
     }
   } catch (error) {
+    console.error('Error in updateBrand:', error.stack);
     await logError('Failed to update brand: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to update brand: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
 const deleteBrand = async (req, res) => {
-  if (!req.session.user_id) {
-    return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-  }
-
+  let pool = null;
   try {
-    const pool = await db.getConnection();
-    const [userRows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized - Not an admin' });
-    }
-
+    pool = await db.getConnection();
     const id = parseInt(req.query.id);
     if (id <= 0) {
       return res.status(400).json({ status: 'error', message: 'Invalid brand ID' });
@@ -139,8 +114,11 @@ const deleteBrand = async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Brand not found' });
     }
   } catch (error) {
+    console.error('Error in deleteBrand:', error.stack);
     await logError('Failed to delete brand: ' + error.message);
     res.status(500).json({ status: 'error', message: 'Failed to delete brand: ' + error.message });
+  } finally {
+    if (pool) pool.release();
   }
 };
 

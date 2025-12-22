@@ -1,7 +1,6 @@
 // src/controllers/promotionController.js
 const db = require('../config/db');
 const { logError } = require('../config/functions');
-const app = require('../app');
 const redisClient = require('../config/redis');
 
 const applyPromotion = async (req, res) => {
@@ -31,112 +30,104 @@ const applyPromotion = async (req, res) => {
     if (promotion) {
       const discountAmount = total_amount * (promotion.discount_percentage / 100);
       await conn.query('UPDATE promotions SET usage_count = usage_count + 1 WHERE promotion_id = ?', [promotion.promotion_id]);
-      res.status(200).json({ status: 'success', discount: discountAmount, promotion_id: promotion.promotion_id });
+      res.json({ status: 'success', discount: discountAmount });
     } else {
-      res.status(400).json({ status: 'error', message: 'Invalid or expired promo code' });
+      res.status(404).json({ status: 'error', message: 'Invalid or expired promo code' });
     }
   } catch (error) {
     await logError('applyPromotion error: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    res.status(500).json({ status: 'error', message: 'Failed to apply promotion' });
   } finally {
     if (conn) conn.release();
   }
 };
 
 const getPromotionsMana = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-
   let conn;
   try {
     conn = await db.getConnection();
-    const [userRows] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-    if (!user || user.role !== 'admin') return res.status(403).json({ status: 'error', message: 'Not admin' });
 
-    const cacheKey = 'admin_promotions_list';
-    let promotions = await redisClient.get(cacheKey);
-
-    if (promotions) {
-      promotions = JSON.parse(promotions);
-    } else {
-      const [rows] = await conn.query(
-        'SELECT promotion_id, name, code, discount_percentage, start_date, end_date, status, usage_count, max_usage FROM promotions ORDER BY created_at DESC'
-      );
-      promotions = rows;
-      await redisClient.set(cacheKey, JSON.stringify(promotions), 'EX', 1800); // 30 min
+    const { search = '', status = '' } = req.query;
+    let query = `
+      SELECT promotion_id, name, code, discount_percentage, start_date, end_date, status, usage_count
+      FROM promotions
+      WHERE 1=1
+    `;
+    const params = [];
+    if (search) {
+      query += ' AND (name LIKE ? OR code LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
     }
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    query += ' ORDER BY created_at DESC';
 
-    res.json({ status: 'success', data: promotions });
+    const [rows] = await conn.query(query, params);
+    res.json({ status: 'success', data: rows });
   } catch (error) {
     await logError('getPromotionsMana error: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch' });
+    res.status(500).json({ status: 'error', message: 'Failed to fetch promotions: ' + error.message });
   } finally {
     if (conn) conn.release();
   }
 };
 
 const addPromotion = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-
+  // Xóa kiểm tra user_id và role admin
   let conn;
   try {
     conn = await db.getConnection();
-    const [userRows] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-    if (!user || user.role !== 'admin') return res.status(403).json({ status: 'error', message: 'Not admin' });
 
-    const { name, code, discount_percentage, start_date, end_date, status = 'active', max_usage } = req.body;
-
-    if (!name || !code || discount_percentage < 0 || discount_percentage > 100) {
-      return res.status(400).json({ status: 'error', message: 'Invalid input' });
+    const { name, code, discount_percentage, start_date, end_date, status = 'active', usage_count = 0, max_usage = null } = req.body;
+    if (!name || !code || !discount_percentage || !start_date) {
+      return res.status(400).json({ status: 'error', message: 'Missing required fields' });
     }
 
-    const [existing] = await conn.query('SELECT promotion_id FROM promotions WHERE code = ?', [code]);
-    if (existing.length) return res.status(400).json({ status: 'error', message: 'Code exists' });
-
-    await conn.query(
-      'INSERT INTO promotions (name, code, discount_percentage, start_date, end_date, status, max_usage) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, code, discount_percentage, start_date, end_date || null, status, max_usage || null]
+    const [result] = await conn.query(
+      `INSERT INTO promotions 
+       (name, code, discount_percentage, start_date, end_date, status, usage_count, max_usage)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, code, discount_percentage, start_date, end_date || null, status, usage_count, max_usage]
     );
 
     await redisClient.del('admin_promotions_list');
-    res.json({ status: 'success', message: 'Promotion added' });
+    res.json({ status: 'success', promotion_id: result.insertId });
   } catch (error) {
     await logError('addPromotion error: ' + error.message);
-    res.status(500).json({ status: 'error', message: 'Failed to add' });
+    res.status(500).json({ status: 'error', message: 'Failed to add promotion' });
   } finally {
     if (conn) conn.release();
   }
 };
 
 const updatePromotion = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-
+  // Xóa kiểm tra user_id và role admin
   let conn;
   try {
     conn = await db.getConnection();
-    const [userRows] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-    if (!user || user.role !== 'admin') return res.status(403).json({ status: 'error', message: 'Not admin' });
 
     const id = parseInt(req.query.id);
-    const { name, code, discount_percentage, start_date, end_date, status, usage_count, max_usage } = req.body;
+    if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });
 
-    if (!id || !name || !code || discount_percentage < 0 || discount_percentage > 100) {
-      return res.status(400).json({ status: 'error', message: 'Invalid input' });
+    const { name, code, discount_percentage, start_date, end_date, status, usage_count, max_usage } = req.body;
+    if (!name || !code || !discount_percentage || !start_date) {
+      return res.status(400).json({ status: 'error', message: 'Missing required fields' });
     }
 
     const [result] = await conn.query(
-      `UPDATE promotions SET name = ?, code = ?, discount_percentage = ?, start_date = ?, end_date = ?, status = ?, usage_count = ?, max_usage = ?
+      `UPDATE promotions
+       SET name = ?, code = ?, discount_percentage = ?, start_date = ?, end_date = ?, status = ?, usage_count = ?, max_usage = ?
        WHERE promotion_id = ?`,
       [name, code, discount_percentage, start_date, end_date || null, status, usage_count || 0, max_usage || null, id]
     );
 
     if (result.affectedRows > 0) {
       await redisClient.del('admin_promotions_list');
-      res.json({ status: 'success', message: 'Promotion updated' });
+      res.json({ status: 'success', message: 'Updated' });
     } else {
-      res.status(404).json({ status: 'error', message: 'Promotion not found' });
+      res.status(404).json({ status: 'error', message: 'Not found' });
     }
   } catch (error) {
     await logError('updatePromotion error: ' + error.message);
@@ -147,14 +138,10 @@ const updatePromotion = async (req, res) => {
 };
 
 const deletePromotion = async (req, res) => {
-  if (!req.session.user_id) return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-
+  // Xóa kiểm tra user_id và role admin
   let conn;
   try {
     conn = await db.getConnection();
-    const [userRows] = await conn.query('SELECT role FROM users WHERE user_id = ?', [req.session.user_id]);
-    const user = userRows[0];
-    if (!user || user.role !== 'admin') return res.status(403).json({ status: 'error', message: 'Not admin' });
 
     const id = parseInt(req.query.id);
     if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });

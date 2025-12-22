@@ -1,12 +1,15 @@
 // src/utils/uploadToIPFS.js
 require("dotenv").config();
 const axios = require("axios");
-const FormData = require("form-data"); // QUAN TRỌNG: Dùng form-data thay vì FormData của browser
+const FormData = require("form-data");
 const fs = require("fs");
 
 // Kiểm tra JWT
 const PINATA_JWT = process.env.PINATA_JWT;
 if (!PINATA_JWT) throw new Error("PINATA_JWT not set in .env!");
+
+// Pinata gateway URL
+const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "https://gateway.pinata.cloud/ipfs/";
 
 // Upload file lên Pinata
 const uploadFileToPinata = async (fileBuffer, filename) => {
@@ -22,15 +25,15 @@ const uploadFileToPinata = async (fileBuffer, filename) => {
     {
       headers: {
         Authorization: `Bearer ${PINATA_JWT}`,
-        ...form.getHeaders(), // QUAN TRỌNG: thêm Content-Type multipart/form-data + boundary
+        ...form.getHeaders(),
       },
     }
   );
 
-  return `ipfs://${res.data.IpfsHash}`;
+  return `${PINATA_GATEWAY}${res.data.IpfsHash}`;
 };
 
-// Upload metadata JSON
+
 const uploadMetadataToPinata = async (name, description, imageURI, extra = {}) => {
   const metadata = {
     name,

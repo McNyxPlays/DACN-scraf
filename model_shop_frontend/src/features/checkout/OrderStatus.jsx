@@ -1,9 +1,9 @@
-// src/features/OrderStatus.jsx
+// src/features/Checkout/OrderStatus.jsx
 import React, { useState } from "react";
 import api from "../../api/index";
 import ImageWithFallback from "../../components/ImageWithFallback";
 import { usePDFHandlers } from "../../utils/usePDFHandlers";
-import {formatCurrency} from "../../utils/formatCurrency";
+import { formatCurrency } from "../../utils/formatCurrency";
 import { Toastify } from "../../components/Toastify";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -18,9 +18,15 @@ const OrderStatus = () => {
 
   const { handleDownloadPDF, handleViewPDF } = usePDFHandlers(orderData);
 
+  // Handle checking order status
   const handleCheckStatus = async () => {
+    if (!orderCode.trim()) {
+      setError("Please enter an order code");
+      return;
+    }
+
     try {
-      const res = await api.get("/orders", { params: { action: "status", order_code: orderCode } });
+      const res = await api.get("/orders/status", { params: { order_code: orderCode } });
       if (res.data.status === "success") {
         setOrderData(res.data.data);
         setViewType("status");
@@ -29,13 +35,19 @@ const OrderStatus = () => {
         setError(res.data.message || "Order not found");
       }
     } catch (err) {
-      setError("Failed to check status");
+      setError(err.response?.data?.message || "Failed to check status");
     }
   };
 
+  // Handle checking order invoice
   const handleCheckInvoice = async () => {
+    if (!orderCode.trim()) {
+      setError("Please enter an order code");
+      return;
+    }
+
     try {
-      const res = await api.get("/orders", { params: { action: "invoice", order_code: orderCode } });
+      const res = await api.get("/orders/invoice", { params: { order_code: orderCode } });
       if (res.data.status === "success") {
         setOrderData(res.data.data);
         setViewType("invoice");
@@ -44,10 +56,11 @@ const OrderStatus = () => {
         setError(res.data.message || "Order not found");
       }
     } catch (err) {
-      setError("Failed to load invoice");
+      setError(err.response?.data?.message || "Failed to load invoice");
     }
   };
 
+  // Handle copying order code to clipboard
   const handleCopyCode = () => {
     navigator.clipboard.writeText(orderData.order_code);
     Toastify.success("Order code copied!");
@@ -92,28 +105,24 @@ const OrderStatus = () => {
                   <p><strong>Phone:</strong> {orderData.phone_number || "N/A"}</p>
                   <p><strong>Email:</strong> {orderData.email || "N/A"}</p>
                 </div>
-               <div className="text-right">
-  {/* SỬA DÒNG NÀY */}
-<p>
-    <strong>Subtotal:</strong> {formatCurrency(
-      orderData.total_amount 
-      - orderData.shipping_cost 
-      + (orderData.discount_amount ? orderData.discount_amount / 25000 : 0)
-    )}
-  </p>
-  
-  <p><strong>Shipping:</strong> {orderData.shipping_cost === 0 ? "Free" : formatCurrency(orderData.shipping_cost)}</p>
-  
-  {orderData.discount_amount > 0 && (
-    <p className="text-red-600 font-bold">
-      <strong>Discount:</strong> -{formatCurrency(orderData.discount_amount)}
-    </p>
-  )}
-  
-  <p className="text-4xl font-bold text-green-600 mt-6">
-    <strong>Total:</strong> {formatCurrency(orderData.total_amount)}
-  </p>
-</div>
+                <div className="text-right">
+                  <p>
+                    <strong>Subtotal:</strong> {formatCurrency(
+                      (orderData.total_amount 
+                      - orderData.shipping_cost 
+                      + (orderData.discount_amount || 0)) / 25000
+                    )}
+                  </p>
+                  <p><strong>Shipping:</strong> {orderData.shipping_cost === 0 ? "Free" : formatCurrency(orderData.shipping_cost / 25000)}</p>
+                  {orderData.discount_amount > 0 && (
+                    <p className="text-red-600 font-bold">
+                      <strong>Discount:</strong> -{formatCurrency(orderData.discount_amount / 25000)}
+                    </p>
+                  )}
+                  <p className="text-4xl font-bold text-green-600 mt-6">
+                    <strong>Total:</strong> {formatCurrency(orderData.total_amount / 25000)}
+                  </p>
+                </div>
               </div>
 
               <h3 className="text-3xl font-bold mt-12 mb-8 text-gray-800">Products</h3>

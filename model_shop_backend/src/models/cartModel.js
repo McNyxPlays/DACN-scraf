@@ -3,7 +3,7 @@ const db = require('../config/db');
 const { logError } = require('../config/functions');
 
 class CartModel {
-  static async addToCart(user_id, session_key, product_id, quantity) {  // THÊM session_key
+  static async addToCart(user_id, session_key, product_id, quantity) { 
     try {
       const pool = await db.getConnection();
       const [existingRows] = await pool.query(

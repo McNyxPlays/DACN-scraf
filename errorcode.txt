@@ -14,3 +14,15 @@
 ================================================================================================================
 
 
+SELECT mint_id, token_id, nft_image_url, nft_metadata_url
+FROM user_nft_mints
+WHERE user_id = <your_user_id>
+  OR nft_image_url LIKE 'ipfs://%';
+
+UPDATE user_nft_mints
+SET 
+  nft_image_url = REPLACE(nft_image_url, 'ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
+  nft_metadata_url = REPLACE(nft_metadata_url, 'ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+WHERE 
+  nft_image_url LIKE 'ipfs://%' 
+  OR nft_metadata_url LIKE 'ipfs://%';

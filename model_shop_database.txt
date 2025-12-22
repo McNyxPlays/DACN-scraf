@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     profile_image VARCHAR(255) NULL DEFAULT NULL,
     banner_image VARCHAR(255) NULL DEFAULT NULL,
     gender VARCHAR(50),
-    wallet_address VARCHAR(42) NULL DEFAULT NULL, -- Thêm ví để dễ liên kết NFT
+    wallet_address VARCHAR(42) NULL DEFAULT NULL, 
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -61,14 +61,16 @@ CREATE TABLE IF NOT EXISTS products (
     is_hot BOOLEAN DEFAULT FALSE,
     is_available BOOLEAN DEFAULT TRUE,
     is_on_sale BOOLEAN DEFAULT FALSE,
-    nft_image_url VARCHAR(500) NULL DEFAULT NULL, -- Ảnh dùng riêng cho NFT (nếu khác ảnh sản phẩm)
+    nft_id INT NULL,                   
+    nft_image_url VARCHAR(500) NULL DEFAULT NULL,  
+    nft_metadata_url VARCHAR(500) NULL DEFAULT NULL,  
+    is_nft_eligible TINYINT(1) DEFAULT 1,  
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
     FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE SET NULL,
     FOREIGN KEY (brand_id) REFERENCES brands(brand_id) ON DELETE SET NULL,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
-
+    FOREIGN KEY (nft_id) REFERENCES user_nft_mints(mint_id) ON DELETE SET NULL,
     INDEX idx_category_id (category_id),
     INDEX idx_brand_id (brand_id),
     INDEX idx_user_id (user_id),
@@ -76,6 +78,8 @@ CREATE TABLE IF NOT EXISTS products (
     INDEX idx_price (price),
     INDEX idx_available (is_available),
     INDEX idx_hot_sale (is_hot, is_on_sale, is_available),
+    INDEX idx_nft_eligible (is_nft_eligible),
+    INDEX idx_nft_id (nft_id),
     FULLTEXT INDEX ft_name_description (name, description)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -98,6 +102,7 @@ CREATE TABLE IF NOT EXISTS carts (
     session_key VARCHAR(255) NULL,
     product_id INT NOT NULL,
     quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    receive_nft TINYINT(1) DEFAULT 0,                      
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_user_product (user_id, product_id),
@@ -105,6 +110,7 @@ CREATE TABLE IF NOT EXISTS carts (
     INDEX idx_user_id (user_id),
     INDEX idx_session_key (session_key),
     INDEX idx_product_id (product_id),
+    INDEX idx_receive_nft (receive_nft),                       
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -139,7 +145,7 @@ CREATE TABLE IF NOT EXISTS orders (
     payment_method ENUM('cod','bank_transfer','momo','vnpay','zalopay','paypal') DEFAULT 'cod',
     shipping_method ENUM('standard','fast','express','store_pickup') DEFAULT 'standard',
     store_id INT NULL,
-    receive_nft BOOLEAN DEFAULT FALSE, -- Mới: user có chọn nhận NFT không
+    receive_nft BOOLEAN DEFAULT FALSE, 
     paid_at TIMESTAMP NULL DEFAULT NULL,
     external_transaction_id VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -156,15 +162,20 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- ========================== 9. ORDER DETAILS ==========================
 CREATE TABLE IF NOT EXISTS order_details (
-    detail_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_detail_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     product_id INT NOT NULL,
-    quantity INT NOT NULL CHECK (quantity > 0),
-    price_at_purchase DECIMAL(12,2) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    price_at_purchase DECIMAL(12,2) NOT NULL,            
+    receive_nft TINYINT(1) DEFAULT 0,                    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
     FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE,
+
     INDEX idx_order_id (order_id),
-    INDEX idx_product_id (product_id)
+    INDEX idx_product_id (product_id),
+    INDEX idx_receive_nft (receive_nft)                   
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================== 10. POSTS & IMAGES ==========================
@@ -295,7 +306,7 @@ CREATE TABLE IF NOT EXISTS promotions (
     promotion_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
     code VARCHAR(50) NOT NULL UNIQUE,
-    discount_percentage DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    discount_percentage DECIMAL(10,2) NOT NULL DEFAULT 0.00,  -- <-- Tên cột đúng là discount_percentage
     start_date TIMESTAMP NULL,
     end_date TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -337,49 +348,47 @@ CREATE TABLE IF NOT EXISTS likes (
     UNIQUE KEY uniq_like (user_id, post_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ========================== 10. ORDER NFT MINTS (BẢNG QUAN TRỌNG NHẤT) ==========================
+-- ========================== 10. ORDER NFT MINTS ==========================
 CREATE TABLE IF NOT EXISTS order_nft_mints (
     mint_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     order_detail_id INT NOT NULL,
-    token_id BIGINT UNSIGNED NOT NULL,        
-    tx_hash CHAR(66) NOT NULL,               
-    mint_address VARCHAR(42) NOT NULL,        
-    nft_image_url VARCHAR(500) NULL,         
+    token_id BIGINT UNSIGNED NOT NULL,
+    tx_hash CHAR(66) NOT NULL,
+    mint_address VARCHAR(42) NOT NULL,
+    nft_image_url VARCHAR(500) NULL,
     minted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE,
     FOREIGN KEY (order_detail_id) REFERENCES order_details(order_detail_id) ON DELETE CASCADE,
-
-    UNIQUE KEY uniq_order_detail (detail_id), 
-    UNIQUE KEY uniq_token_id (token_id),            
+    UNIQUE KEY uniq_order_detail (order_detail_id),
+    UNIQUE KEY uniq_token_id (token_id),
     INDEX idx_order_id (order_id),
     INDEX idx_tx_hash (tx_hash),
     INDEX idx_mint_address (mint_address),
     INDEX idx_minted_at (minted_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ========================== 11. USER NFT MINTS (BẢNG QUAN TRỌNG NHẤT) ==========================
+-- ========================== 11. USER NFT MINTS ==========================
 CREATE TABLE IF NOT EXISTS user_nft_mints (
-    mint_id            INT AUTO_INCREMENT PRIMARY KEY,
-    user_id            INT NOT NULL,
-    token_id           BIGINT UNSIGNED NOT NULL, 
-    design_id          BIGINT UNSIGNED NOT NULL,         
-    tx_hash            CHAR(66) NOT NULL,               
-    mint_address       VARCHAR(42) NOT NULL,             
-    nft_metadata_url   VARCHAR(500) NULL,                 
-    nft_image_url      VARCHAR(500) NULL,                
-    name               VARCHAR(255) NOT NULL DEFAULT '',  
-    description        TEXT NULL,                       
-    price              DECIMAL(20,8) DEFAULT 0,         
-    royalty_percent    TINYINT UNSIGNED DEFAULT 0,        
-    max_supply         INT UNSIGNED DEFAULT 1,             
-    current_supply     INT UNSIGNED DEFAULT 1,           
-    is_for_sale        BOOLEAN DEFAULT FALSE,           
-    listed_price       DECIMAL(20,8) DEFAULT NULL,      
-    minted_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    listed_at          TIMESTAMP NULL DEFAULT NULL,
-    sold_at            TIMESTAMP NULL DEFAULT NULL,
+    mint_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_id BIGINT UNSIGNED NOT NULL, 
+    design_id BIGINT UNSIGNED NOT NULL,         
+    tx_hash CHAR(66) NOT NULL,               
+    mint_address VARCHAR(42) NOT NULL,             
+    nft_metadata_url VARCHAR(500) NULL,                 
+    nft_image_url VARCHAR(500) NULL,                
+    name  VARCHAR(255) NOT NULL DEFAULT '',  
+    description TEXT NULL,                       
+    price DECIMAL(20,8) DEFAULT 0,         
+    royalty_percent TINYINT UNSIGNED DEFAULT 0,        
+    max_supply INT UNSIGNED DEFAULT 1,             
+    current_supply INT UNSIGNED DEFAULT 1,           
+    is_for_sale BOOLEAN DEFAULT FALSE,           
+    listed_price DECIMAL(20,8) DEFAULT NULL,      
+    minted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    listed_at TIMESTAMP NULL DEFAULT NULL,
+    sold_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     UNIQUE KEY uniq_token_id (token_id),                  
     UNIQUE KEY uniq_user_token (user_id, token_id),

@@ -20,12 +20,16 @@ mmodel_shop_backend/
 │   │     ├── categoryController.js
 │   │     ├── countController.js
 │   │     ├── favoriteController.js
+│   │     ├── nftController.js
 │   │     ├── notificationController.js
 │   │     ├── orderController.js
 │   │     ├── postController.js
 │   │     ├── productController.js
 │   │     ├── promotionController.js
 │   │     └── userController.js
+│   │
+│   │
+│   ├── hardhat/
 │   │
 │   ├── logs/
 │   │     └── error.log
@@ -55,11 +59,15 @@ mmodel_shop_backend/
 │   │
 │   ├── utils/
 │   │     ├── emitNotification.js
-│   │     ├── formatCurrency.js
+│   │     ├── global.js
 │   │     ├── invoiceGenerator.js
+│   │     ├── mintNFT.js
+│   │     ├── mintUserNFT.js
 │   │     ├── sendGlobalNotification.js
 │   │     ├── sendInvoiceEmail.js
-│   │     └── socket.js
+│   │     ├── sendVerificationEmail.js
+│   │     ├── socket.js
+│   │     └──uploadToIPFS
 │   │
 │   ├── app.js
 │   └── server.js
@@ -112,23 +120,24 @@ model_shop_frontend/
       │
       ├── features/
       │     ├── Admin/
-      │     │     ├── Admin.jsx
-      │     │     ├── ErrorBoundary.jsx
-      │     │     ├── BrandsManagement/
-      │     │     │       ├── AddBrand.jsx
-      │     │     │       ├── BrandsManagement.jsx
-      │     │     │       └── EditBrand.jsx
-      │     │     ├── CategoriesManagement/
-      │     │     │       ├── AddCategories.jsx
-      │     │     │       ├── CategoriesManagement.jsx
-      │     │     │       └── EditCategories.jsx
-      │     │     ├── ProductManagement/
-      │     │     │       ├── AddProduct.jsx
-      │     │     │       ├── EditProduct.jsx
-      │     │     │       └── ProductManagement.jsx
-      │     │     └── UserManagement/
-      │     │             ├── AddUser.jsx
-      │     │             ├── EditUser.jsx
+      │     │     ├── Admin.js
+      │     │     ├── Blockchain/
+      │     │     │       ├── NFTManagement.jsx
+      │     │     │       └── NFTTransactions.jsx
+      │     │     ├── Catalog/
+      │     │     │       ├── Brands.jsx
+      │     │     │       ├── Categories.jsx
+      │     │     │       └── Products.jsx
+      │     │     ├── Marketing/
+      │     │     │       └── Promotions.jsx
+      │     │     └── Notifications/
+      │     │     │       └── PushNotifications.jsx
+      │     │     ├── Orders/
+      │     │     │       └── Orders.jsx
+      │     │     ├── Reports/
+      │     │     │       ├── NFTReports.jsx
+      │     │     │       └── Sales.jsx
+      │     │     └── Users/
       │     │             └── UserManagement.jsx
       │     │
       │     ├── Cart/
@@ -220,15 +229,6 @@ model_shop_frontend/
       │                 ├── SidebarLeft.jsx
       │                 ├── SidebarRight.jsx
       │                 └── UserProfileOverview.jsx
-      │
-      ├── web3/
-      │     ├── components/
-      │     │       ├── CheckboxNFT.jsx
-      │     │       ├── MintReceiptButton.jsx
-      │     │       ├── NFTCard.jsx
-      │     │       └── UserNFTs.jsx
-      │     ├── nftABI.js
-      │     └── useNFTList.js
       │
       └── styles/
             ├── App.css

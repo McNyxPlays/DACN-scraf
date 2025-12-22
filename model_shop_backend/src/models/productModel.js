@@ -7,140 +7,77 @@ class ProductModel {
     try {
       const pool = await db.getConnection();
       const [rows] = await pool.query(
-        `SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
-                c.name as category_name, b.name as brand_name, p.created_at
-         FROM products p
-         LEFT JOIN categories c ON p.category_id = c.category_id
-         LEFT JOIN brands b ON p.brand_id = b.brand_id
-         WHERE p.product_id = ?`,
+        `SELECT 
+          product_id, name, category_id, brand_id, price, discount, stock_quantity, 
+          description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id, 
+          created_at, updated_at
+         FROM products 
+         WHERE product_id = ?`,
         [id]
       );
-      const product = rows[0];
-      if (product) {
-        const [images] = await pool.query(
-          'SELECT image_url FROM product_images WHERE product_id = ? ORDER BY is_main DESC, image_id ASC',
-          [id]
-        );
-        product.images = images.length ? images.map(img => `/Uploads/products/${img.image_url}`) : ['/placeholder.jpg'];
-      }
-      return product;
+      return rows[0];
     } catch (error) {
       await logError(`Failed to find product by ID: ${error.message}`);
       throw error;
     }
   }
 
-  static async findAll({ search = '%', category_ids = [], brand_ids = [], page = 1, limit = 12, sort = 'popularity', price_min = 0, price_max = Number.MAX_SAFE_INTEGER, status_new = false, status_hot = false, status_sale = false, discount_min = 0, discount_max = 100 }) {
+  static async findAll({ search = '', category_id = null, brand_id = null, status = '', limit = 20, offset = 0 }) {
     try {
       const pool = await db.getConnection();
       let query = `
-        SELECT p.product_id, p.name, p.description, p.price, p.status, p.stock_quantity, p.discount,
-               c.name as category_name, b.name as brand_name, p.created_at
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.category_id
-        LEFT JOIN brands b ON p.brand_id = b.brand_id
-        WHERE p.name LIKE ?
+        SELECT 
+          product_id, name, category_id, brand_id, price, discount, stock_quantity, 
+          description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id, 
+          created_at, updated_at
+        FROM products 
+        WHERE 1=1
       `;
-      const params = [`%${search}%`];
+      const params = [];
 
-      if (category_ids.length && category_ids[0] !== '') {
-        const placeholders = category_ids.map(() => '?').join(',');
-        query += ` AND p.category_id IN (${placeholders})`;
-        params.push(...category_ids.map(Number));
+      if (search.trim()) {
+        query += ' AND (name LIKE ? OR description LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`);
       }
 
-      if (brand_ids.length && brand_ids[0] !== '') {
-        const placeholders = brand_ids.map(() => '?').join(',');
-        query += ` AND p.brand_id IN (${placeholders})`;
-        params.push(...brand_ids.map(Number));
+      if (category_id) {
+        query += ' AND category_id = ?';
+        params.push(category_id);
       }
 
-      if (price_min > 0 || price_max < Number.MAX_SAFE_INTEGER) {
-        query += ' AND p.price BETWEEN ? AND ?';
-        params.push(price_min, price_max);
+      if (brand_id) {
+        query += ' AND brand_id = ?';
+        params.push(brand_id);
       }
 
-      const statusConditions = [];
-      if (status_new) statusConditions.push("p.status = 'new'");
-      if (status_hot) statusConditions.push("p.status = 'hot'");
-      if (status_sale) statusConditions.push("p.status = 'sale'");
-      if (statusConditions.length) {
-        query += ` AND (${statusConditions.join(' OR ')})`;
+      if (status) {
+        const flags = ProductModel.mapStatusToFlags(status); // Use static method
+        if (flags.is_new) query += ' AND is_new = TRUE';
+        if (flags.is_used) query += ' AND is_used = TRUE';
+        if (flags.is_custom) query += ' AND is_custom = TRUE';
+        if (flags.is_hot) query += ' AND is_hot = TRUE';
+        if (!flags.is_available) query += ' AND is_available = FALSE';
+        if (flags.is_on_sale) query += ' AND is_on_sale = TRUE';
       }
 
-      if (discount_min > 0 || discount_max < 100) {
-        query += ' AND p.discount BETWEEN ? AND ?';
-        params.push(discount_min, discount_max);
-      }
+      query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
 
-      switch (sort) {
-        case 'price_low':
-          query += ' ORDER BY p.price ASC';
-          break;
-        case 'price_high':
-          query += ' ORDER BY p.price DESC';
-          break;
-        case 'newest':
-          query += ' ORDER BY p.created_at DESC';
-          break;
-        case 'discount_high':
-          query += ' ORDER BY p.discount DESC';
-          break;
-        case 'popularity':
-        default:
-          query += ' ORDER BY (SELECT COUNT(*) FROM order_details od WHERE od.product_id = p.product_id) DESC';
-          break;
-      }
-
-      let countQuery = 'SELECT COUNT(*) as total FROM products p WHERE p.name LIKE ?';
-      const countParams = [`%${search}%`];
-      if (category_ids.length && category_ids[0] !== '') {
-        const placeholders = category_ids.map(() => '?').join(',');
-        countQuery += ` AND p.category_id IN (${placeholders})`;
-        countParams.push(...category_ids.map(Number));
-      }
-      if (brand_ids.length && brand_ids[0] !== '') {
-        const placeholders = brand_ids.map(() => '?').join(',');
-        countQuery += ` AND p.brand_id IN (${placeholders})`;
-        countParams.push(...brand_ids.map(Number));
-      }
-      if (statusConditions.length) {
-        countQuery += ` AND (${statusConditions.join(' OR ')})`;
-      }
-      if (discount_min > 0 || discount_max < 100) {
-        countQuery += ' AND p.discount BETWEEN ? AND ?';
-        countParams.push(discount_min, discount_max);
-      }
-
-      const [countRows] = await pool.query(countQuery, countParams);
-      const total = countRows[0].total;
-      const totalPages = Math.ceil(total / limit);
-
-      query += ` LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
-      const [products] = await pool.query(query, params);
-
-      for (let product of products) {
-        const [images] = await pool.query(
-          'SELECT image_url FROM product_images WHERE product_id = ? ORDER BY is_main DESC, image_id ASC',
-          [product.product_id]
-        );
-        product.images = images.length ? images.map(img => `/Uploads/products/${img.image_url}`) : ['/placeholder.jpg'];
-      }
-
-      return { products, total, totalPages };
+      const [rows] = await pool.query(query, params);
+      return rows;
     } catch (error) {
-      await logError(`Failed to fetch products: ${error.message}`);
+      await logError(`Failed to find all products: ${error.message}`);
       throw error;
     }
   }
 
-  static async create({ name, category_id, brand_id, price, discount = 0, stock_quantity = 0, description, status = 'new' }) {
+  static async create({ name, category_id, brand_id, price, discount, stock_quantity, description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id }) {
     try {
       const pool = await db.getConnection();
       const [result] = await pool.query(
-        `INSERT INTO products (name, category_id, brand_id, price, discount, stock_quantity, description, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [name, category_id, brand_id, price, discount, stock_quantity, description, status]
+        `INSERT INTO products (name, category_id, brand_id, price, discount, stock_quantity, description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [name, category_id, brand_id, price, discount, stock_quantity, description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id]
       );
       return result.insertId;
     } catch (error) {
@@ -149,14 +86,16 @@ class ProductModel {
     }
   }
 
-  static async update(id, { name, category_id, brand_id, price, discount, stock_quantity, description, status }) {
+  static async update(id, { name, category_id, brand_id, price, discount, stock_quantity, description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id }) {
     try {
       const pool = await db.getConnection();
       const [result] = await pool.query(
-        `UPDATE products
-         SET name = ?, category_id = ?, brand_id = ?, price = ?, discount = ?, stock_quantity = ?, description = ?, status = ?
+        `UPDATE products SET 
+          name = ?, category_id = ?, brand_id = ?, price = ?, discount = ?, stock_quantity = ?, 
+          description = ?, is_new = ?, is_used = ?, is_custom = ?, is_hot = ?, is_available = ?, 
+          is_on_sale = ?, nft_id = ?
          WHERE product_id = ?`,
-        [name, category_id, brand_id, price, discount, stock_quantity, description, status, id]
+        [name, category_id, brand_id, price, discount, stock_quantity, description, is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id, id]
       );
       return result.affectedRows;
     } catch (error) {
@@ -176,39 +115,37 @@ class ProductModel {
     }
   }
 
-  static async getImage(image_id) {
+  static async associateNft(product_id, nft_id) {
     try {
       const pool = await db.getConnection();
-      const [rows] = await pool.query('SELECT image_url FROM product_images WHERE image_id = ?', [image_id]);
-      return rows[0];
-    } catch (error) {
-      await logError(`Failed to get product image: ${error.message}`);
-      throw error;
-    }
-  }
-
-  static async deleteImage(image_id) {
-    try {
-      const pool = await db.getConnection();
-      const [result] = await pool.query('DELETE FROM product_images WHERE image_id = ?', [image_id]);
+      const [result] = await pool.query('UPDATE products SET nft_id = ? WHERE product_id = ?', [nft_id, product_id]);
       return result.affectedRows;
     } catch (error) {
-      await logError(`Failed to delete product image: ${error.message}`);
+      await logError(`Failed to associate NFT with product: ${error.message}`);
       throw error;
     }
   }
 
-  static async addImage(product_id, image_url, is_main = 0) {
-    try {
-      const pool = await db.getConnection();
-      await pool.query(
-        'INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
-        [product_id, image_url, is_main]
-      );
-    } catch (error) {
-      await logError(`Failed to add product image: ${error.message}`);
-      throw error;
+  static mapStatusToFlags(status) {
+    const flags = {
+      is_new: false,
+      is_used: false,
+      is_custom: false,
+      is_hot: false,
+      is_available: true,
+      is_on_sale: false,
+    };
+    if (!status) return flags;
+    switch (status.toLowerCase()) {
+      case 'new': flags.is_new = true; break;
+      case 'used': flags.is_used = true; break;
+      case 'custom': flags.is_custom = true; break;
+      case 'hot': flags.is_hot = true; break;
+      case 'unavailable': flags.is_available = false; break;
+      case 'sale':
+      case 'on_sale': flags.is_on_sale = true; break;
     }
+    return flags;
   }
 }
 

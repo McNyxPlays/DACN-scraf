@@ -19,19 +19,19 @@ const router = express.Router();
 const { register, login, logout } = require('../controllers/authController');
 const {
   getCategories, getBrands, getProduct, getProducts,
-  getProductMana, addProduct, updateProduct, deleteProduct, deleteProductImage
+  getProductMana, addProduct, updateProduct, deleteProduct
 } = require('../controllers/productController');
 const { getUserStats, getUsersMana, updateUser, deleteUser,connectWallet, createUserNFT, getCreatedNFTs } = require('../controllers/userController');
 const { getCategoriesMana, addCategory, updateCategory, deleteCategory } = require('../controllers/categoryController');
 const { getBrandsMana, addBrand, updateBrand, deleteBrand } = require('../controllers/brandController');
 const { addToCart, getCart, updateCart, deleteCart } = require('../controllers/cartController');
 const { getFavorites, addFavorite, deleteFavorite } = require('../controllers/favoriteController');
-const { getNotifications, markNotificationsRead, getNotificationCount } = require('../controllers/notificationController');
+const { getNotifications, markNotificationsRead, getNotificationCount, sendNotification } = require('../controllers/notificationController');
 const { addPost, getPosts, updatePost, deletePost, getPostImages, getComments } = require('../controllers/postController');
 const { applyPromotion, getPromotionsMana, addPromotion, updatePromotion, deletePromotion } = require('../controllers/promotionController');
 const { getCounts } = require('../controllers/countController');
-const { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice, getOrderByCode, saveNFTMint } = require('../controllers/orderController');
-const { createNFT } = require('../controllers/nftController');
+const { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice, getOrderByCode, getOrdersMana, updateOrderStatus, saveNFTMint } = require('../controllers/orderController');
+const { createNFT, getOrderNftMints, getUserNFTs, getAllUserNfts } = require('../controllers/nftController');
 
 // ====================== AUTH ======================
 router.post('/auth/register', register);
@@ -47,14 +47,14 @@ router.delete('/user', deleteUser);
 router.post('/user/connect-wallet', connectWallet);
 router.get('/user/nfts/created', getCreatedNFTs);
 router.post('/nft/create', upload.single('image'), createNFT)
+router.get('/nft/user-nfts', getUserNFTs);
+router.get('/users/nft', getAllUserNfts);
 
 // ====================== PRODUCT ======================
 router.get('/products/categories', getCategories);
 router.get('/products/brands', getBrands);
 router.get('/products', getProducts);
 router.get('/products/:id', getProduct);
-
-router.delete('/products/image', deleteProductImage);
 
 // Admin
 router.get('/products/mana', getProductMana);
@@ -77,6 +77,7 @@ router.delete('/favorites', deleteFavorite);
 router.get('/notifications/count', getNotificationCount);
 router.get('/notifications', getNotifications);
 router.post('/notifications/read', markNotificationsRead);
+router.post('/notifications/send', sendNotification);
 
 // ====================== POSTS ======================
 router.post('/posts', upload.array('images', 10), addPost);
@@ -106,30 +107,20 @@ router.delete('/brands/mana', deleteBrand);
 
 // ====================== ADMIN DASHBOARD ======================
 router.get('/admin/counts', getCounts);
+router.get('/order-nft-mints', getOrderNftMints);
 
 // ====================== ORDERS - ĐÃ HOÀN CHỈNH CHO NFT ======================
-
-// 1. Lấy CSRF token (giữ lại cách cũ nếu frontend vẫn dùng)
 router.get('/orders', (req, res) => {
   const { action } = req.query;
   if (action === 'csrf_token') return getCsrfToken(req, res);
   res.status(400).json({ status: 'error', message: 'Invalid action' });
 });
-
-// 2. Tạo đơn hàng
 router.post('/orders', createOrder);
-
-// 3. Lấy trạng thái đơn hàng (cũ, vẫn dùng được)
 router.get('/orders/status', getOrderStatus);
-
-// 4. Lấy hóa đơn PDF (nếu cần)
 router.get('/orders/invoice', getOrderInvoice);
-
-// 5. LẤY CHI TIẾT ĐƠN HÀNG THEO MÃ (OrderSuccess.jsx dùng cái này)
-//    → Trả về receive_nft + order_detail_id + NFT đã mint (nếu có)
 router.get('/orders/code/:order_code', getOrderByCode);
-
-// 6. API MỚI: Lưu NFT sau khi mint thành công (rất quan trọng!)
 router.post('/orders/nft-mint', saveNFTMint);
+router.get('/orders/mana', getOrdersMana);
+router.put('/orders/mana', updateOrderStatus);
 
 module.exports = router;

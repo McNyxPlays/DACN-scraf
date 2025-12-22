@@ -18,10 +18,8 @@ const io = new Server(server, {
   }
 });
 
-// Gắn io vào app để dùng ở mọi nơi (controllers/utils)
 app.set('io', io);
 
-// Khởi tạo notification handler
 const { setupNotificationSocket } = require('./socket/notificationHandler');
 setupNotificationSocket(io);
 

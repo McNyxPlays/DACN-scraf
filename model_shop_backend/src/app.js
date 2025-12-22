@@ -9,7 +9,7 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-
+app.set('trust proxy', 1);
 // ==================== SESSION STORE THÔNG MINH ====================
 let redisClient = null;
 let sessionStore;
@@ -52,7 +52,6 @@ app.use(session({
   }
 }));
 
-// TỰ ĐỘNG LƯU session_key CHO GUEST KHI CÓ TRONG QUERY (SỬA SYNTAX ĐÚNG)
 app.use((req, res, next) => {
   if (!req.session.user_id && req.query.session_key && (!req.session.session_key || req.session.session_key !== req.query.session_key)) {
     req.session.session_key = req.query.session_key;
@@ -60,13 +59,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
 const apiRoutes = require('./routes/api');
 app.use('/api', apiRoutes);
 
 app.use('/Uploads', express.static(path.join(__dirname, 'Uploads')));
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ status: 'error', message: 'Something went wrong!' });

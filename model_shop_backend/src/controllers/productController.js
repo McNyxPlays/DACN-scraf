@@ -1,10 +1,16 @@
 // src/controllers/productController.js
+
 const db = require('../config/db');
 const { logError } = require('../config/functions');
 const fs = require('fs').promises;
 const path = require('path');
-const app = require('../app');
 const redisClient = require('../config/redis');
+const ProductModel = require('../models/productModel');
+
+const uploadDir = path.join(__dirname, '../uploads/products'); 
+fs.mkdir(uploadDir, { recursive: true }).catch(err => 
+  logError(`Failed to create upload directory: ${err.message}`)
+);
 
 const mapStatusToFlags = (status) => {
   const flags = {
@@ -15,469 +21,466 @@ const mapStatusToFlags = (status) => {
     is_available: true,
     is_on_sale: false,
   };
+
   if (!status) return flags;
+
   switch (status.toLowerCase()) {
-    case 'new': flags.is_new = true; break;
-    case 'used': flags.is_used = true; break;
-    case 'custom': flags.is_custom = true; break;
-    case 'hot': flags.is_hot = true; break;
-    case 'unavailable': flags.is_available = false; break;
+    case 'new':
+      flags.is_new = true;
+      break;
+    case 'used':
+      flags.is_used = true;
+      break;
+    case 'custom':
+      flags.is_custom = true;
+      break;
+    case 'hot':
+      flags.is_hot = true;
+      break;
+    case 'unavailable':
+      flags.is_available = false;
+      break;
     case 'sale':
-    case 'on_sale': flags.is_on_sale = true; break;
+    case 'on_sale':
+      flags.is_on_sale = true;
+      break;
   }
+
   return flags;
 };
 
-// ====================== PUBLIC ======================
-const getCategories = async (req, res) => {
-  const cacheKey = 'pub_categories';
+const getUserRole = async (user_id) => {
+  let pool = null;
   try {
-    let data = await redisClient.get(cacheKey);
-    if (data) return res.json({ status: 'success', data: JSON.parse(data) });
+    pool = await db.getConnection();
+    const [rows] = await pool.query('SELECT role FROM users WHERE user_id = ?', [user_id]);
+    return rows[0]?.role || 'user';
+  } catch (err) {
+    logError(`getUserRole error: ${err.message}`);
+    return 'user';
+  } finally {
+    if (pool) pool.release();
+  }
+};
 
-    const conn = await db.getConnection();
-    const [rows] = await conn.query(`
+// Lấy danh sách categories (public)
+const getCategories = async (req, res) => {
+  let pool = null;
+  try {
+    pool = await db.getConnection();
+    const [rows] = await pool.query(`
       SELECT c.category_id, c.name, COUNT(p.product_id) AS product_count
       FROM categories c
       LEFT JOIN products p ON c.category_id = p.category_id AND p.is_available = TRUE
-      GROUP BY c.category_id, c.name
+      GROUP BY c.category_id
       ORDER BY c.name
     `);
-    conn.release();
-
-    await redisClient.set(cacheKey, JSON.stringify(rows), 'EX', 1800); // 30 phút
     res.json({ status: 'success', data: rows });
   } catch (err) {
-    await logError('getCategories error: ' + err.message);
+    logError(`getCategories error: ${err.message}`);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
+// Lấy danh sách brands (public)
 const getBrands = async (req, res) => {
-  const cacheKey = 'pub_brands';
+  let pool = null;
   try {
-    let data = await redisClient.get(cacheKey);
-    if (data) return res.json({ status: 'success', data: JSON.parse(data) });
-
-    const conn = await db.getConnection();
-    const [rows] = await conn.query(`
-      SELECT b.brand_id, b.name, COUNT(p.product_id) AS product_count
-      FROM brands b
-      LEFT JOIN products p ON b.brand_id = p.brand_id AND p.is_available = TRUE
-      GROUP BY b.brand_id, b.name
-      ORDER BY b.name
-    `);
-    conn.release();
-
-    await redisClient.set(cacheKey, JSON.stringify(rows), 'EX', 1800); // 30 phút
+    pool = await db.getConnection();
+    const [rows] = await pool.query('SELECT brand_id, name FROM brands ORDER BY name');
     res.json({ status: 'success', data: rows });
   } catch (err) {
-    await logError('getBrands error: ' + err.message);
+    logError(`getBrands error: ${err.message}`);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
+// Lấy chi tiết sản phẩm (public)
 const getProduct = async (req, res) => {
-  const id = parseInt(req.params.id || req.query.id); 
-  if (!id || isNaN(id)) return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
+  const id = parseInt(req.params.id);
+  if (isNaN(id) || id <= 0) {
+    return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
+  }
 
-  const cacheKey = `product_${id}`;
+  let pool = null;
   try {
-    let data = await redisClient.get(cacheKey);
-    if (data) return res.json({ status: 'success', data: JSON.parse(data) });
-
-    const conn = await db.getConnection();
-    const [rows] = await conn.query(`
-      SELECT p.*, c.name AS category_name, b.name AS brand_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.category_id
-      LEFT JOIN brands b ON p.brand_id = p.brand_id
-      WHERE p.product_id = ? AND p.is_available = TRUE
-    `, [id]);
-    conn.release();
-
-    if (rows.length === 0) {
-      return res.status(404).json({ status: 'error', message: 'Product not found' });
-    }
-
-    await redisClient.set(cacheKey, JSON.stringify(rows[0]), 'EX', 3600); // 1 giờ
-    res.json({ status: 'success', data: rows[0] });
-  } catch (err) {
-    await logError('getProduct error: ' + err.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
-  }
-};
-
-const getProducts = async (req, res) => {
-  let {
-    page = 1,
-    limit = 20,
-    sort = 'popularity',
-    search,
-    category_ids,
-    brand_ids,
-    status_new,
-    status_used,
-    status_custom,
-    status_hot,
-    status_available = 'true',
-    status_on_sale
-  } = req.query;
-
-  page = Math.max(1, parseInt(page) || 1);
-  limit = Math.min(100, Math.max(1, parseInt(limit) || 20));
-  const offset = (page - 1) * limit;
-
-  // === Xây dựng WHERE ===
-  const whereConditions = [];
-  const queryParams = [];
-
-  if (status_available === 'true') whereConditions.push('p.is_available = TRUE');
-  if (status_available === 'false') whereConditions.push('p.is_available = FALSE');
-
-  if (search) {
-    whereConditions.push('(p.name LIKE ? OR p.description LIKE ?)');
-    queryParams.push(`%${search}%`, `%${search}%`);
-  }
-
-  if (category_ids) {
-    const cats = category_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
-    if (cats.length) {
-      whereConditions.push(`p.category_id IN (${cats.map(() => '?').join(',')})`);
-      queryParams.push(...cats);
-    }
-  }
-
-  if (brand_ids) {
-    const brands = brand_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
-    if (brands.length) {
-      whereConditions.push(`p.brand_id IN (${brands.map(() => '?').join(',')})`);
-      queryParams.push(...brands);
-    }
-  }
-
-  if (status_new === 'true') whereConditions.push('p.is_new = TRUE');
-  if (status_used === 'true') whereConditions.push('p.is_used = TRUE');
-  if (status_custom === 'true') whereConditions.push('p.is_custom = TRUE');
-  if (status_hot === 'true') whereConditions.push('p.is_hot = TRUE');
-  if (status_on_sale === 'true') whereConditions.push('p.is_on_sale = TRUE');
-
-  const whereClause = whereConditions.length ? 'AND ' + whereConditions.join(' AND ') : '';
-
-  // === ORDER BY an toàn (whitelist) ===
-  let orderBy = 'p.created_at DESC';
-  switch (sort) {
-    case 'price_low':  orderBy = '(p.price * (1 - p.discount/100)) ASC'; break;
-    case 'price_high': orderBy = '(p.price * (1 - p.discount/100)) DESC'; break;
-    case 'newest':     orderBy = 'p.created_at DESC'; break;
-    case 'popularity': orderBy = '(p.stock_quantity > 0) DESC, p.created_at DESC'; break;
-    default:           orderBy = 'p.created_at DESC';
-  }
-
-  // === Cache key ===
-  const cacheKey = `products:${page}:${limit}:${sort}:${search||''}:${category_ids||''}:${brand_ids||''}:${status_new||''}:${status_on_sale||''}:${status_available||''}`;
-
-  try {
-    const cached = await redisClient.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
-
-    const conn = await db.getConnection();
-
-    // Query chính – KHÔNG CÓ COMMENT TRONG CHUỖI SQL!
-    const [rows] = await conn.query(`
-      SELECT 
-        p.*,
-        c.name AS category_name,
-        b.name AS brand_name,
-        pi.image_url AS main_image,
-        (p.price * (1 - p.discount/100)) AS discounted_price
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.category_id
-      LEFT JOIN brands b ON p.brand_id = b.brand_id
-      LEFT JOIN product_images pi ON p.product_id = pi.product_id AND pi.is_main = 1
-      WHERE 1=1 ${whereClause}
-      GROUP BY p.product_id
-      ORDER BY ${orderBy}
-      LIMIT ? OFFSET ?
-    `, [...queryParams, limit, offset]);
-
-    // Đếm tổng cho pagination
-    const [countResult] = await conn.query(`
-      SELECT COUNT(DISTINCT p.product_id) AS total
-      FROM products p
-      WHERE 1=1 ${whereClause}
-    `, queryParams);
-
-    const totalProducts = countResult[0]?.total || 0;
-    const totalPages = Math.ceil(totalProducts / limit);
-
-    conn.release();
-
-    const result = {
-      status: 'success',
-      data: rows,
-      pagination: {
-        current_page: page,
-        total_pages: totalPages,
-        total_products: totalProducts,
-        per_page: limit
-      }
-    };
-
-    await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
-    res.json(result);
-  } catch (err) {
-    await logError('getProducts error: ' + err.message);
-    console.error('getProducts error:', err);
-    res.status(500).json({ status: 'error', message: 'Server error' });
-  }
-};
-
-// ====================== MANAGEMENT (AUTH REQUIRED) ======================
-const getProductMana = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
-
-  const id = parseInt(req.query.id);
-  if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });
-
-  try {
-    const conn = await db.getConnection();
-    const [rows] = await conn.query(`
-      SELECT p.*, c.name AS category_name, b.name AS brand_name
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.category_id
-      LEFT JOIN brands b ON p.brand_id = p.brand_id
-      WHERE p.product_id = ? AND (p.user_id = ? OR ? = 'admin')
-    `, [id, req.session.user_id, (await getUserRole(req.session.user_id))]);
+    pool = await db.getConnection();
+    const [rows] = await pool.query(
+      `SELECT p.*, c.name as category_name, b.name as brand_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.category_id
+       LEFT JOIN brands b ON p.brand_id = b.brand_id
+       WHERE p.product_id = ?`,
+      [id]
+    );
 
     if (!rows.length) {
-      conn.release();
-      return res.status(404).json({ status: 'error', message: 'Product not found or unauthorized' });
+      return res.status(404).json({ status: 'error', message: 'Product not found' });
     }
 
     const product = rows[0];
 
-    const [images] = await conn.query(`
-      SELECT image_id, image_url, is_main
-      FROM product_images
-      WHERE product_id = ?
-      ORDER BY is_main DESC
-    `, [id]);
-    product.images = images;
+    const [images] = await pool.query(
+      'SELECT image_id, image_url, is_main FROM product_images WHERE product_id = ? ORDER BY is_main DESC, image_id ASC',
+      [id]
+    );
 
-    conn.release();
-    res.json({ status: 'success', data: product });
+    product.images = images.map(img => ({
+      image_id: img.image_id,
+      image_url: `/uploads/products/${img.image_url}`,
+      is_main: img.is_main
+    }));
+
+    res.json({ status: 'success', product });
   } catch (err) {
-    await logError('getProductMana error: ' + err.message);
+    logError(`getProduct error: ${err.message}`);
     res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release();
   }
 };
 
+// Lấy danh sách sản phẩm (public)
+const getProducts = async (req, res) => {
+  const {
+    search,
+    category_id,
+    brand_id,
+    min_price,
+    max_price,
+    sort_by = 'created_at',
+    order = 'DESC',
+    limit = 20,
+    page = 1
+  } = req.query;
+
+  let pool = null;
+  try {
+    pool = await db.getConnection();
+
+    let query = `
+      SELECT p.product_id, p.name, p.price, p.discount, p.stock_quantity,
+             (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = TRUE LIMIT 1) as main_image
+      FROM products p
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (search?.trim()) {
+      query += ' AND (p.name LIKE ? OR p.description LIKE ?)';
+      params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+    }
+
+    if (category_id && !isNaN(parseInt(category_id))) {
+      query += ' AND p.category_id = ?';
+      params.push(parseInt(category_id));
+    }
+
+    if (brand_id && !isNaN(parseInt(brand_id))) {
+      query += ' AND p.brand_id = ?';
+      params.push(parseInt(brand_id));
+    }
+
+    if (min_price && !isNaN(parseFloat(min_price))) {
+      query += ' AND p.price >= ?';
+      params.push(parseFloat(min_price));
+    }
+
+    if (max_price && !isNaN(parseFloat(max_price))) {
+      query += ' AND p.price <= ?';
+      params.push(parseFloat(max_price));
+    }
+
+    query += ` ORDER BY p.${sort_by} ${order.toUpperCase()} LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    const [rows] = await pool.query(query, params);
+
+    rows.forEach(p => {
+      p.main_image = p.main_image ? `/uploads/products/${p.main_image}` : null;
+    });
+
+    res.json({ status: 'success', data: rows });
+  } catch (err) {
+    logError(`getProducts error: ${err.message}`);
+    res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release();
+  }
+};
+
+const getProductMana = async (req, res) => {
+  console.log('getProductMana called with query:', req.query);
+
+  let pool = null;
+  try {
+    pool = await db.getConnection();
+
+    if (req.query.id) {
+      const id = parseInt(req.query.id);
+      if (isNaN(id) || id <= 0) {
+        return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
+      }
+
+      const [rows] = await pool.query(
+        `SELECT p.*, c.name as category_name, b.name as brand_name
+         FROM products p
+         LEFT JOIN categories c ON p.category_id = c.category_id
+         LEFT JOIN brands b ON p.brand_id = b.brand_id
+         WHERE p.product_id = ?`,
+        [id]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({ status: 'error', message: 'Product not found' });
+      }
+
+      const product = rows[0];
+
+      const [images] = await pool.query(
+        'SELECT image_id, image_url, is_main FROM product_images WHERE product_id = ? ORDER BY is_main DESC, image_id ASC',
+        [id]
+      );
+
+      product.images = images.map(img => ({
+        image_id: img.image_id,
+        image_url: `/uploads/products/${img.image_url}`,
+        is_main: img.is_main
+      }));
+
+      res.json({ status: 'success', data: [product] });
+    } else {
+      // Danh sách sản phẩm
+      const search = req.query.search ? `%${req.query.search}%` : '%';
+      const category_id = req.query.category_id ? parseInt(req.query.category_id) : null;
+      const brand_id = req.query.brand_id ? parseInt(req.query.brand_id) : null;
+      const status = req.query.status || null;
+
+      let query = `
+        SELECT p.product_id, p.name, p.price, p.discount, p.stock_quantity, p.description,
+               (SELECT image_url FROM product_images WHERE product_id = p.product_id AND is_main = TRUE LIMIT 1) as main_image,
+               c.name as category_name, b.name as brand_name
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        LEFT JOIN brands b ON p.brand_id = b.brand_id
+        WHERE (p.name LIKE ? OR p.description LIKE ?)
+      `;
+      const params = [search, search];
+
+      if (category_id) {
+        query += ' AND p.category_id = ?';
+        params.push(category_id);
+      }
+      if (brand_id) {
+        query += ' AND p.brand_id = ?';
+        params.push(brand_id);
+      }
+      if (status) {
+        const flags = mapStatusToFlags(status);
+        query += ' AND p.is_new = ? AND p.is_used = ? AND p.is_custom = ? AND p.is_hot = ? AND p.is_available = ? AND p.is_on_sale = ?';
+        params.push(flags.is_new, flags.is_used, flags.is_custom, flags.is_hot, flags.is_available, flags.is_on_sale);
+      }
+
+      const [products] = await pool.query(query, params);
+
+      products.forEach(p => {
+        p.main_image = p.main_image ? `/uploads/products/${p.main_image}` : null;
+      });
+
+      res.json({ status: 'success', data: products });
+    }
+  } catch (err) {
+    logError(`getProductMana error: ${err.message}`);
+    res.status(500).json({ status: 'error', message: 'Server error' });
+  } finally {
+    if (pool) pool.release();
+  }
+};
+
+// Thêm sản phẩm mới
 const addProduct = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  if (!req.session.user_id) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
 
-  const { name, category_id, brand_id, price, discount, stock_quantity, description, status } = req.body;
-  const images = req.files?.images;
-
-  const flags = mapStatusToFlags(status);
-
-  let conn;
+  let pool = null;
   try {
-    conn = await db.getConnection();
-    await conn.query('START TRANSACTION');
+    pool = await db.getConnection();
+    await pool.beginTransaction();
 
-    const [result] = await conn.query(`
-      INSERT INTO products (user_id, name, category_id, brand_id, price, discount, stock_quantity, description,
-        is_new, is_used, is_custom, is_hot, is_available, is_on_sale)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [req.session.user_id, name, category_id || null, brand_id || null, price, discount || 0, stock_quantity || 0, description || '',
-      flags.is_new, flags.is_used, flags.is_custom, flags.is_hot, flags.is_available, flags.is_on_sale]);
+    const {
+      name, category_id, brand_id, price, discount = 0, stock_quantity,
+      description, status = 'new', nft_id
+    } = req.body;
 
-    const product_id = result.insertId;
+    if (!name?.trim() || !price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+      throw new Error('Invalid product data');
+    }
 
-    if (images && images.length) {
-      const upload_dir = path.join(__dirname, '../Uploads/products');
-      await fs.mkdir(upload_dir, { recursive: true });
+    const flags = mapStatusToFlags(status);
 
-      for (let i = 0; i < images.length; i++) {
-        const file = images[i];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (!['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) continue;
+    const [result] = await pool.query(
+      `INSERT INTO products (name, category_id, brand_id, user_id, price, discount, stock_quantity, description,
+                             is_new, is_used, is_custom, is_hot, is_available, is_on_sale, nft_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name.trim(), category_id || null, brand_id || null, req.session.user_id, parseFloat(price), parseFloat(discount),
+       parseInt(stock_quantity) || 0, description || null, flags.is_new, flags.is_used, flags.is_custom, flags.is_hot,
+       flags.is_available, flags.is_on_sale, nft_id || null]
+    );
 
-        const filename = `${product_id}_${Date.now()}_${i}${ext}`;
-        const filepath = path.join(upload_dir, filename);
+    const productId = result.insertId;
+
+    // Handle image uploads
+    const files = req.files || [];
+    if (files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const filename = `${Date.now()}_${i}${path.extname(file.originalname)}`;
+        const filepath = path.join(uploadDir, filename);
+
         await fs.writeFile(filepath, file.buffer);
 
-        const url = `products/${filename}`;
-        await conn.query('INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
-          [product_id, url, i === 0]);
+        await pool.query(
+          'INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
+          [productId, filename, i === 0]
+        );
       }
     }
 
-    await conn.query('COMMIT');
-
-    await redisClient.del('pub_categories');
-    await redisClient.del('pub_brands');
-
-    res.json({ status: 'success', product_id });
+    await pool.commit();
+    res.json({ status: 'success', message: 'Product added successfully', product_id: productId });
   } catch (err) {
-    await conn.query('ROLLBACK');
-    await logError('addProduct error: ' + err.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    if (pool) await pool.rollback();
+    logError(`addProduct error: ${err.message}`);
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to add product' });
   } finally {
-    if (conn) conn.release();
+    if (pool) pool.release();
   }
 };
 
+// Cập nhật sản phẩm
 const updateProduct = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
-  const id = parseInt(req.query.id);
-  if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });
+  if (!req.session.user_id) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
 
-  const { name, category_id, brand_id, price, discount, stock_quantity, description, status } = req.body;
-  const newImages = req.files?.newImages; 
-
-  const flags = mapStatusToFlags(status);
-
-  let conn;
+  let pool = null;
   try {
-    conn = await db.getConnection();
-    await conn.query('START TRANSACTION');
+    pool = await db.getConnection();
+    await pool.beginTransaction();
 
-    const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [id]);
-    if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized' });
+    const product_id = parseInt(req.query.id);
+    if (isNaN(product_id) || product_id <= 0) {
+      return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
     }
 
-    await conn.query(`
-      UPDATE products SET name = ?, category_id = ?, brand_id = ?, price = ?, discount = ?, stock_quantity = ?, description = ?,
-      is_new = ?, is_used = ?, is_custom = ?, is_hot = ?, is_available = ?, is_on_sale = ?
-      WHERE product_id = ?
-    `, [name, category_id || null, brand_id || null, price, discount || 0, stock_quantity || 0, description || '',
-      flags.is_new, flags.is_used, flags.is_custom, flags.is_hot, flags.is_available, flags.is_on_sale, id]);
+    const {
+      name, category_id, brand_id, price, discount, stock_quantity,
+      description, status, nft_id
+    } = req.body;
 
-    if (newImages && newImages.length) {
-      const upload_dir = path.join(__dirname, '../Uploads/products');
-      await fs.mkdir(upload_dir, { recursive: true });
+    const flags = mapStatusToFlags(status);
 
-      for (let i = 0; i < newImages.length; i++) {
-        const file = newImages[i];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (!['.jpg', '.jpeg', '.png', '.gif'].includes(ext)) continue;
+    await pool.query(
+      `UPDATE products SET name = ?, category_id = ?, brand_id = ?, price = ?, discount = ?, stock_quantity = ?,
+                           description = ?, is_new = ?, is_used = ?, is_custom = ?, is_hot = ?, is_available = ?,
+                           is_on_sale = ?, nft_id = ?
+       WHERE product_id = ?`,
+      [name, category_id, brand_id, price, discount, stock_quantity, description,
+       flags.is_new, flags.is_used, flags.is_custom, flags.is_hot, flags.is_available, flags.is_on_sale, nft_id, product_id]
+    );
 
-        const filename = `${id}_${Date.now()}_${i}${ext}`;
-        const filepath = path.join(upload_dir, filename);
-        await fs.writeFile(filepath, file.buffer);
+    // Remove specified images
+    const removeImages = req.body.remove_images
+      ? (Array.isArray(req.body.remove_images) ? req.body.remove_images : [req.body.remove_images])
+      : [];
 
-        const url = `products/${filename}`;
-        await conn.query('INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
-          [id, url, false]);
+    for (const imgId of removeImages) {
+      const imgIdNum = parseInt(imgId);
+      if (!isNaN(imgIdNum)) {
+        const [img] = await pool.query('SELECT image_url FROM product_images WHERE image_id = ?', [imgIdNum]);
+        if (img.length) {
+          await fs.unlink(path.join(uploadDir, img[0].image_url)).catch(() => {});
+        }
+        await pool.query('DELETE FROM product_images WHERE image_id = ?', [imgIdNum]);
       }
     }
 
-    await conn.query('COMMIT');
+    // Add new images
+    const files = req.files || [];
+    if (files.length > 0) {
+      const [main] = await pool.query('SELECT image_id FROM product_images WHERE product_id = ? AND is_main = TRUE', [product_id]);
+      const hasMain = main.length > 0;
 
-    await redisClient.del(`product_${id}`);
-    await redisClient.del('pub_categories');
-    await redisClient.del('pub_brands');
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const filename = `${Date.now()}_${i}${path.extname(file.originalname)}`;
+        const filepath = path.join(uploadDir, filename);
+        await fs.writeFile(filepath, file.buffer);
 
-    res.json({ status: 'success', message: 'Product updated' });
-  } catch (err) {
-    await conn.query('ROLLBACK');
-    await logError('updateProduct error: ' + err.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
-  } finally {
-    if (conn) conn.release();
-  }
-};
-
-const deleteProduct = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
-  const id = parseInt(req.query.id);
-  if (!id) return res.status(400).json({ status: 'error', message: 'Invalid ID' });
-
-  let conn;
-  try {
-    conn = await db.getConnection();
-    await conn.query('START TRANSACTION');
-
-    const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [id]);
-    if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized' });
+        await pool.query(
+          'INSERT INTO product_images (product_id, image_url, is_main) VALUES (?, ?, ?)',
+          [product_id, filename, !hasMain && i === 0]
+        );
+      }
     }
 
-    // Delete images files
-    const [images] = await conn.query('SELECT image_url FROM product_images WHERE product_id = ?', [id]);
-    for (let img of images) {
-      const filepath = path.join(__dirname, '../Uploads/', img.image_url);
-      await fs.unlink(filepath).catch(() => {}); // Ignore if not found
-    }
-
-    await conn.query('DELETE FROM product_images WHERE product_id = ?', [id]);
-    await conn.query('DELETE FROM products WHERE product_id = ?', [id]);
-
-    await conn.query('COMMIT');
-
-    await redisClient.del(`product_${id}`);
-    await redisClient.del('pub_categories');
-    await redisClient.del('pub_brands');
-
-    res.json({ status: 'success', message: 'Product deleted' });
-  } catch (err) {
-    await conn.query('ROLLBACK');
-    await logError('deleteProduct error: ' + err.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
-  } finally {
-    if (conn) conn.release();
-  }
-};
-
-const deleteProductImage = async (req, res) => {
-  if (!req.session.user_id) return res.status(401).json({ status: 'error', message: 'Unauthorized' });
-
-  const { image_id, product_id } = req.body;
-  if (!image_id || !product_id) return res.status(400).json({ status: 'error', message: 'Invalid params' });
-
-  let conn;
-  try {
-    conn = await db.getConnection();
-
-    const [product] = await conn.query('SELECT user_id FROM products WHERE product_id = ?', [product_id]);
-    if (!product.length || (product[0].user_id !== req.session.user_id && await getUserRole(req.session.user_id) !== 'admin')) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized' });
-    }
-
-    const [image] = await conn.query('SELECT image_url FROM product_images WHERE image_id = ? AND product_id = ?', [image_id, product_id]);
-    if (!image.length) return res.status(404).json({ status: 'error', message: 'Image not found' });
-
-    const filepath = path.join(__dirname, '../Uploads/', image[0].image_url);
-    await fs.unlink(filepath).catch(() => {});
-
-    await conn.query('DELETE FROM product_images WHERE image_id = ?', [image_id]);
-
-    // If deleted main, set new main if any
-    const [remaining] = await conn.query('SELECT image_id FROM product_images WHERE product_id = ? LIMIT 1', [product_id]);
-    if (remaining.length) {
-      await conn.query('UPDATE product_images SET is_main = TRUE WHERE image_id = ?', [remaining[0].image_id]);
-    }
-
+    await pool.commit();
     await redisClient.del(`product_${product_id}`);
 
-    res.json({ status: 'success', message: 'Image deleted' });
+    res.json({ status: 'success', message: 'Product updated successfully' });
   } catch (err) {
-    await logError('deleteProductImage error: ' + err.message);
-    res.status(500).json({ status: 'error', message: 'Server error' });
+    if (pool) await pool.rollback();
+    logError(`updateProduct error: ${err.message}`);
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to update product' });
   } finally {
-    if (conn) conn.release();
+    if (pool) pool.release();
   }
 };
 
-// Helper: Get user role (giả sử, implement nếu cần)
-const getUserRole = async (user_id) => {
-  const conn = await db.getConnection();
-  const [user] = await conn.query('SELECT role FROM users WHERE user_id = ?', [user_id]);
-  conn.release();
-  return user[0]?.role || 'user';
+// Xóa sản phẩm
+const deleteProduct = async (req, res) => {
+  if (!req.session.user_id) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
+
+  let pool = null;
+  try {
+    pool = await db.getConnection();
+    await pool.beginTransaction();
+
+    const id = parseInt(req.query.id);
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ status: 'error', message: 'Invalid product ID' });
+    }
+
+    const [images] = await pool.query('SELECT image_url FROM product_images WHERE product_id = ?', [id]);
+    for (const img of images) {
+      await fs.unlink(path.join(uploadDir, img.image_url)).catch(() => {});
+    }
+
+    await pool.query('DELETE FROM product_images WHERE product_id = ?', [id]);
+
+    await pool.query(
+      'DELETE FROM products WHERE product_id = ? AND (user_id = ? OR ? = "admin")',
+      [id, req.session.user_id, await getUserRole(req.session.user_id)]
+    );
+
+    await pool.commit();
+    await redisClient.del(`product_${id}`);
+
+    res.json({ status: 'success', message: 'Product deleted successfully' });
+  } catch (err) {
+    if (pool) await pool.rollback();
+    logError(`deleteProduct error: ${err.message}`);
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to delete product' });
+  } finally {
+    if (pool) pool.release();
+  }
 };
 
 module.exports = {
@@ -488,6 +491,5 @@ module.exports = {
   getProductMana,
   addProduct,
   updateProduct,
-  deleteProduct,
-  deleteProductImage,
+  deleteProduct
 };

@@ -4,7 +4,6 @@ import { Routes, Route, Outlet, Navigate } from "react-router-dom";
 import { Provider, useDispatch } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { ToastifyContainer } from "./components/Toastify";
-import { Toastify } from "./components/Toastify";
 
 import Header from "./components/Header";
 import LoginModal from "./components/LoginModal/LoginModal";
@@ -30,11 +29,8 @@ import OrderStatus from "./features/Checkout/OrderStatus";
 import { store, persistor } from "./redux/store";
 import { useSelector } from "react-redux";
 import { validateUser } from "./redux/userSlice";
-import api from "./api/index";
 import { SessionProvider } from "./context/SessionContext";
 
-import { WagmiProvider } from 'wagmi'
-import { wagmiConfig } from './web3/wagmiConfig.js'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const queryClient = new QueryClient()
