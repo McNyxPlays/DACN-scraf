@@ -1,49 +1,12 @@
-import React, { useEffect, useState } from "react";
-import api from "../../../api/index";
-import { Toastify } from "../../../components/Toastify";
+import React, { useState } from "react";
 
 const SidebarLeft = ({ userData, isEditing, setUserData, className }) => {
-  const [socialLinks, setSocialLinks] = useState([]);
+  const [socialLinks] = useState([]);  // Empty array to keep UI but no content
   const [bioInput, setBioInput] = useState(userData.bio);
 
-  useEffect(() => {
-    api
-      .get("/social-links")
-      .then((response) => {
-        if (response.data.status === "success") {
-          setSocialLinks(response.data.social_links);
-          if (response.data.social_links.length > 0 && response.data.social_links[0].bio) {
-            setBioInput(response.data.social_links[0].bio);
-            setUserData((prev) => ({ ...prev, bio: response.data.social_links[0].bio }));
-          }
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching social links:", error);
-        Toastify.error("Failed to load social links.");
-      });
-  }, [setUserData]);
-
   const handleBioUpdate = () => {
-    if (!isEditing) return;
-    api
-      .put("/social-links", {
-        link_id: socialLinks.length > 0 ? socialLinks[0].link_id : null,
-        platform: socialLinks.length > 0 ? socialLinks[0].platform : "other",
-        link_url: socialLinks.length > 0 ? socialLinks[0].link_url : "",
-        display_name: socialLinks.length > 0 ? socialLinks[0].display_name : "",
-        bio: bioInput,
-      })
-      .then((response) => {
-        if (response.data.status === "success") {
-          setUserData((prev) => ({ ...prev, bio: bioInput }));
-          Toastify.success("Bio updated successfully!");
-        }
-      })
-      .catch((error) => {
-        console.error("Error updating bio:", error);
-        Toastify.error("Failed to update bio.");
-      });
+    // Local update only, no backend save (users table no bio)
+    setUserData((prev) => ({ ...prev, bio: bioInput }));
   };
 
   return (
@@ -89,6 +52,7 @@ const SidebarLeft = ({ userData, isEditing, setUserData, className }) => {
               </a>
             </div>
           ))}
+          {socialLinks.length === 0 && <p className="text-gray-500 text-sm">No social links added.</p>}
         </div>
       </div>
     </div>

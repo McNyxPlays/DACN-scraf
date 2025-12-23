@@ -1,40 +1,60 @@
 // src/components/ImageWithFallback.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-const ImageWithFallback = ({ src, alt, className = "", fallback = null }) => {
+const ImageWithFallback = ({ 
+  src, 
+  alt = "", 
+  className = "", 
+  fallbackSrc = "/fallback.png",  
+  skeletonClass = "bg-gray-200 animate-pulse"
+}) => {
   const [imgSrc, setImgSrc] = useState(src);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
-  const handleError = () => {
-    setError(true);
-    setImgSrc(fallback || "/placeholder-product.jpg");
-  };
+  // Reset state khi src thay đổi
+  useEffect(() => {
+    setImgSrc(src);
+    setIsLoading(true);
+    setHasError(false);
+  }, [src]);
 
   const handleLoad = () => {
-    setLoading(false);
+    setIsLoading(false);
+    setHasError(false);
+  };
+
+  const handleError = () => {
+    if (!hasError && imgSrc !== fallbackSrc) {
+      setImgSrc(fallbackSrc);
+      setHasError(true);
+      setIsLoading(true); // Tải lại fallback
+    } else {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      {/* Loading skeleton */}
-      {loading && (
-        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg"></div>
+      {/* Skeleton khi loading */}
+      {isLoading && (
+        <div className={`absolute inset-0 ${skeletonClass} rounded-lg`}></div>
       )}
 
-      {/* Main image */}
+      {/* Hình ảnh chính */}
       <img
         src={imgSrc}
         alt={alt}
         className={`w-full h-full object-cover transition-opacity duration-300 ${
-          loading ? "opacity-0" : "opacity-100"
+          isLoading ? "opacity-0" : "opacity-100"
         }`}
         onLoad={handleLoad}
         onError={handleError}
+        loading="lazy"  // Tối ưu tải
       />
 
-      {/* Fallback UI khi lỗi */}
-      {error && (
+      {/* Fallback UI khi cả src và fallback đều lỗi */}
+      {!isLoading && hasError && imgSrc === fallbackSrc && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
           <div className="text-center">
             <i className="ri-image-line text-4xl text-gray-400"></i>

@@ -30,8 +30,10 @@ const { getNotifications, markNotificationsRead, getNotificationCount, sendNotif
 const { addPost, getPosts, updatePost, deletePost, getPostImages, getComments } = require('../controllers/postController');
 const { applyPromotion, getPromotionsMana, addPromotion, updatePromotion, deletePromotion } = require('../controllers/promotionController');
 const { getCounts } = require('../controllers/countController');
-const { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice, getOrderByCode, getOrdersMana, updateOrderStatus, saveNFTMint } = require('../controllers/orderController');
+const { getCsrfToken, createOrder, getOrderStatus, getOrderInvoice, getOrderByCode, getOrdersMana, updateOrderStatus, saveNFTMint, getUserOrders } = require('../controllers/orderController');
 const { createNFT, getOrderNftMints, getUserNFTs, getAllUserNfts } = require('../controllers/nftController');
+const { getConversations, getMessages, sendMessage } = require('../controllers/messageController');
+const { chatWithAI } = require('../controllers/aiChatController');
 
 // ====================== AUTH ======================
 router.post('/auth/register', register);
@@ -57,10 +59,10 @@ router.get('/products', getProducts);
 router.get('/products/:id', getProduct);
 
 // Admin
-router.get('/products/mana', getProductMana);
-router.post('/products/mana', upload.array('images', 10), addProduct);
-router.put('/products/mana', updateProduct);
-router.delete('/products/mana', deleteProduct);
+router.get('/product/mana', getProductMana);
+router.post('/product/mana', upload.array('images', 10), addProduct);
+router.put('/product/mana', updateProduct);
+router.delete('/product/mana', deleteProduct);
 
 // ====================== CART ======================
 router.post('/cart', addToCart);
@@ -122,5 +124,19 @@ router.get('/orders/code/:order_code', getOrderByCode);
 router.post('/orders/nft-mint', saveNFTMint);
 router.get('/orders/mana', getOrdersMana);
 router.put('/orders/mana', updateOrderStatus);
+router.get('/user/orders', getUserOrders);
+
+// ====================== MESSAGES ======================
+router.get('/messages', (req, res) => {
+  if (req.query.conversation_id) {
+    return getMessages(req, res);
+  } else {
+    return getConversations(req, res);
+  }
+});
+router.post('/messages', sendMessage);
+
+// ====================== IA ======================
+router.post('/ai-chat', chatWithAI);
 
 module.exports = router;

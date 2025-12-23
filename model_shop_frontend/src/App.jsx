@@ -32,6 +32,7 @@ import { validateUser } from "./redux/userSlice";
 import { SessionProvider } from "./context/SessionContext";
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import AIChatbox from "./components/AIChatbox";
 
 const queryClient = new QueryClient()
 
@@ -63,6 +64,7 @@ const Layout = ({ isLoginModalOpen, setIsLoginModalOpen, isCartOpen, setIsCartOp
       <Outlet />
       <Footer />
       <BackToTop />
+      <AIChatbox />
       <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
       <Cart isOpen={isCartOpen} setIsOpen={setIsCartOpen} />
       <ToastifyContainer />

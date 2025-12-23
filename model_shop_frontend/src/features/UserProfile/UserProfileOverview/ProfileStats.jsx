@@ -14,7 +14,7 @@ const ProfileStats = ({ userData }) => {
           <div className="text-sm text-gray-500">Followers</div>
         </div>
         <div className="text-center p-3 rounded-lg hover:bg-gray-50 transition-all">
-          <div className="text-xl font-semibold text-gray-900">{userData.comments || 0}</div>
+          <div className="text-xl font-semibold text-gray-900">{userData.following || 0}</div>
           <div className="text-sm text-gray-500">Following</div>
         </div>
       </div>

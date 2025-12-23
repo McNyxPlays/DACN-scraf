@@ -2,9 +2,10 @@
 import React from "react";
 import api from "../../../api/index"; // Để gọi API download invoice
 import { Toastify } from "../../../components/Toastify";
+import { formatCurrency } from "../../../utils/formatCurrency"; // Import hàm format
 
 function OrderHistoryDetailsView({ orders, selectedOrder }) {
-  const order = orders.find((o) => o.id === selectedOrder);
+  const order = orders.find((o) => o.order_id === selectedOrder);
 
   if (!order) {
     return (
@@ -19,8 +20,8 @@ function OrderHistoryDetailsView({ orders, selectedOrder }) {
 
   const orderDetails = [
     {
-      label: "Model Name",
-      value: order.model,
+      label: "Order Code",
+      value: order.order_code,
     },
     {
       label: "Status",
@@ -28,31 +29,34 @@ function OrderHistoryDetailsView({ orders, selectedOrder }) {
     },
     {
       label: "Order Date",
-      value: order.date,
+      value: new Date(order.date).toLocaleString(),
     },
     {
       label: "Total",
-      value: formatCurrency(order.total),// value: `${order.total.toLocaleString()} VNĐ`,
+      value: formatCurrency(order.total),
     },
-    {
-      label: "Payment Method",
-      value: "Bank Transfer",
-    },
-    {
-      label: "Shipping Address",
-      value: "123 ABC Street, District 1, Ho Chi Minh City",
-    },
+    // Thêm các field khác nếu cần, ví dụ từ API chi tiết
+    // {
+    //   label: "Payment Method",
+    //   value: order.payment_method || "Bank Transfer",
+    // },
+    // {
+    //   label: "Shipping Address",
+    //   value: order.shipping_address || "123 ABC Street, District 1, Ho Chi Minh City",
+    // },
   ];
 
   const handleDownloadInvoice = async () => {
     try {
-      const response = await api.get(`/orders/${order.id}/invoice`, {
+      // Sử dụng order_code thay vì order_id để khớp với backend
+      const response = await api.get(`/orders/invoice`, {
+        params: { order_code: order.order_code },
         responseType: "blob", // Để nhận PDF binary
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `invoice_${order.id}.pdf`);
+      link.setAttribute("download", `invoice_${order.order_code}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -65,7 +69,7 @@ function OrderHistoryDetailsView({ orders, selectedOrder }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <h3 className="text-xl font-semibold text-gray-900 mb-4">
-        Order Details #{order.id}
+        Order Details #{order.order_code}
       </h3>
       <div className="space-y-4">
         {orderDetails.map((detail, index) => (

@@ -20,56 +20,31 @@ const UserProfileOverview = ({ user }) => {
       : "Unknown",
     bio: "Passionate model builder.",
     followers: 0,
+    following: 0,
     posts: 0,
-    comments: 0,
-    profile_image: "",
-    banner_image: "",
+    profile_image: user?.profile_image || "",
+    banner_image: user?.banner_image || "",
     profile_completion: user ? 85 : 50,
   });
 
   useEffect(() => {
-    api
-      .get("/user")
-      .then((response) => {
-        if (response.data.status === "success") {
-          const fetchedUser = response.data.user;
-          setUserData((prev) => ({
-            ...prev,
-            name: fetchedUser.full_name,
-            handle: fetchedUser.email ? `@${fetchedUser.email.split("@")[0]}` : "@user",
-            location: fetchedUser.address || "Not specified",
-            created_at: fetchedUser.created_at
-              ? new Date(fetchedUser.created_at).toLocaleDateString("en-US", {
-                  month: "long",
-                  year: "numeric",
-                })
-              : "Unknown",
-            profile_image: fetchedUser.profile_image || "",
-            banner_image: fetchedUser.banner_image || "",
-          }));
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching user data:", error);
-        Toastify.error("Failed to load user data.");
-      });
-
-    api
-      .get("/user-stats")
-      .then((response) => {
+    const fetchStats = async () => {
+      try {
+        const response = await api.get("/user/stats");
         if (response.data.status === "success") {
           setUserData((prev) => ({
             ...prev,
             followers: response.data.followers,
+            following: response.data.following,
             posts: response.data.posts,
-            comments: response.data.comments,
           }));
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error("Error fetching user stats:", error);
         Toastify.error("Failed to load user stats.");
-      });
+      }
+    };
+    fetchStats();
   }, []);
 
   return (
@@ -117,6 +92,7 @@ const UserProfileOverview = ({ user }) => {
           <MainContent
             activeTab={activeTab}
             setActiveTab={setActiveTab}
+            user={user}  // Pass user for user_id in fetches
           />
         </div>
       </main>

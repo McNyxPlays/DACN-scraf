@@ -108,7 +108,7 @@ const generateInvoicePDF = async (order, options = {}) => {
   // ===== TỔNG TIỀN - ĐÃ SỬA CHÍNH XÁC 100% =====
   // Giả sử backend đã gửi đúng các trường này bằng VND (hoặc USD → chỉ format 1 lần)
   const totalVND = order.total_amount_vnd || order.total_amount * 25000 || 0;
-  const shippingVND = order.shipping_cost_vnd || order.shipping_cost * 25000 || 0;
+  const shippingVND = order.shipping_cost_vnd || order.shipping_cost * 1 || 0;
   const discountVND = order.discount_amount_vnd || order.discount_amount * 25000 || 0;
   const subtotalVND = totalVND - shippingVND + discountVND;
 

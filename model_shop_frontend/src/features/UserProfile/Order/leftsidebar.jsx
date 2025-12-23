@@ -9,19 +9,21 @@ function OrderHistorySidebar({ orders, selectedOrder, setSelectedOrder }) {
         {orders.length > 0 ? (
           orders.map((order) => (
             <div
-              key={order.id}
+              key={order.order_id}
               className={`cursor-pointer p-4 rounded-lg border border-gray-100 transition-all duration-200 ${
-                selectedOrder === order.id
+                selectedOrder === order.order_id
                   ? "bg-primary/10 border-primary shadow-sm"
                   : "hover:bg-gray-50 hover:border-gray-200"
               }`}
-              onClick={() => setSelectedOrder(order.id)}
+              onClick={() => setSelectedOrder(order.order_id)}
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium text-gray-900 truncate">
-                  {order.model}
+                  Order #{order.order_code}
                 </span>
-                <span className="text-gray-400 text-xs">{order.date}</span>
+                <span className="text-gray-400 text-xs">
+                  {new Date(order.date).toLocaleDateString()}
+                </span>
               </div>
               <p className="text-gray-600 text-sm mt-1">{order.status}</p>
             </div>
